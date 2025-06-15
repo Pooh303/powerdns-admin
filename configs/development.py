@@ -1,5 +1,5 @@
 import os
-#import urllib.parse
+import urllib.parse
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 ### BASIC APP CONFIG
@@ -27,26 +27,13 @@ CAPTCHA_SESSION_KEY = 'captcha_image'
 #Set to TRUE for CAPTCHA, or enable another stateful session tracking system
 SESSION_TYPE = 'sqlalchemy'
 
-### DATABASE - MySQL
-## Don't forget to uncomment the import in the top
-#SQLALCHEMY_DATABASE_URI = 'mysql://{}:{}@{}/{}'.format(
-#    urllib.parse.quote_plus(SQLA_DB_USER),
-#    urllib.parse.quote_plus(SQLA_DB_PASSWORD),
-#    SQLA_DB_HOST,
-#    SQLA_DB_NAME
-#)
-
 ### DATABASE - PostgreSQL
-## Don't forget to uncomment the import in the top
-#SQLALCHEMY_DATABASE_URI = 'postgres://{}:{}@{}/{}'.format(
-#    urllib.parse.quote_plus(SQLA_DB_USER),
-#    urllib.parse.quote_plus(SQLA_DB_PASSWORD),
-#    SQLA_DB_HOST,
-#    SQLA_DB_NAME
-#)
-
-### DATABASE - SQLite
-SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'pdns.db')
+SQLALCHEMY_DATABASE_URI = 'postgresql://{}:{}@{}/{}'.format(
+    urllib.parse.quote_plus(SQLA_DB_USER),
+    urllib.parse.quote_plus(SQLA_DB_PASSWORD),
+    SQLA_DB_HOST,
+    SQLA_DB_NAME
+)
 
 ### SMTP config
 # MAIL_SERVER = 'localhost'

@@ -1,0 +1,30 @@
+[
+    {
+        "account": "",
+        "catalog": "",
+        "dnssec": false,
+        "edited_serial": 2025060903,
+        "id": "poohwadol.me.",
+        "kind": "Native",
+        "last_check": 0,
+        "masters": [],
+        "name": "poohwadol.me.",
+        "notified_serial": 0,
+        "serial": 2025060903,
+        "url": "/api/v1/servers/localhost/zones/poohwadol.me."
+    },
+    {
+        "account": "",
+        "catalog": "",
+        "dnssec": false,
+        "edited_serial": 2025060901,
+        "id": "test.com.",
+        "kind": "Native",
+        "last_check": 0,
+        "masters": [],
+        "name": "test.com.",
+        "notified_serial": 0,
+        "serial": 2025060901,
+        "url": "/api/v1/servers/localhost/zones/test.com."
+    }
+]

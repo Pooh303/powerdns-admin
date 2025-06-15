@@ -26,6 +26,8 @@ from ..models.base import db
 
 from ..lib.errors import ApiKeyCreateFail
 from ..lib.schema import ApiPlainKeySchema
+from ..lib import utils
+from urllib.parse import urljoin
 
 apikey_plain_schema = ApiPlainKeySchema(many=True)
 
@@ -230,7 +232,11 @@ def server_statistics():
     domains = Domain.query.all()
     users = User.query.all()
 
-    server = Server(server_id='localhost')
+    server = Server(
+        name='localhost',
+        api_url=Setting().get('pdns_api_url'),
+        api_key=Setting().get('pdns_api_key')
+    )
     statistics = server.get_statistic()
     history_number = History.query.count()
 
@@ -260,7 +266,11 @@ def server_configuration():
     domains = Domain.query.all()
     users = User.query.all()
 
-    server = Server(server_id='localhost')
+    server = Server(
+        name='localhost',
+        api_url=Setting().get('pdns_api_url'),
+        api_key=Setting().get('pdns_api_key')
+    )
     configs = server.get_config()
     history_number = History.query.count()
 
@@ -1455,14 +1465,69 @@ def setting_pdns():
         pdns_api_key = request.form.get('pdns_api_key')
         pdns_version = request.form.get('pdns_version')
 
-        Setting().set('pdns_api_url', pdns_api_url)
-        Setting().set('pdns_api_key', pdns_api_key)
-        Setting().set('pdns_version', pdns_version)
+        # Test PowerDNS API connection
+        headers = {'X-API-Key': pdns_api_key}
+        try:
+            utils.fetch_json(
+                urljoin(pdns_api_url, '/api/v1/servers'),
+                headers=headers,
+                timeout=int(Setting().get('pdns_api_timeout')),
+                verify=Setting().get('verify_ssl_connections')
+            )
+            
+            # Save settings if connection successful
+            Setting().set('pdns_api_url', pdns_api_url)
+            Setting().set('pdns_api_key', pdns_api_key)
+            Setting().set('pdns_version', pdns_version)
+            
+            flash('PowerDNS API connection successful. Settings saved.', 'success')
+            return redirect(url_for('dashboard.dashboard'))
+            
+        except Exception as e:
+            current_app.logger.error(f"Failed to connect to PowerDNS API: {e}")
+            flash('Failed to connect to PowerDNS API. Please check your settings.', 'error')
+            return render_template('admin_setting_pdns.html',
+                                   pdns_api_url=pdns_api_url,
+                                   pdns_api_key=pdns_api_key,
+                                   pdns_version=pdns_version)
 
-        return render_template('admin_setting_pdns.html',
-                               pdns_api_url=pdns_api_url,
-                               pdns_api_key=pdns_api_key,
-                               pdns_version=pdns_version)
+
+@admin_bp.route('/setting/pdns/test', methods=['POST'])
+@login_required
+@admin_role_required
+def test_pdns_connection():
+    pdns_api_url = request.form.get('pdns_api_url')
+    pdns_api_key = request.form.get('pdns_api_key')
+    
+    # Ensure URL ends with /api/v1
+    if not pdns_api_url.endswith('/api/v1'):
+        pdns_api_url = pdns_api_url.rstrip('/') + '/api/v1'
+    
+    headers = {'X-API-Key': pdns_api_key}
+    try:
+        # current_app.logger.info(f"Testing PowerDNS API connection to: {pdns_api_url}")
+        # current_app.logger.info(f"Using headers: {headers}")
+        api_url = f"{pdns_api_url}/servers"
+        # current_app.logger.info(f"Full URL will be: {api_url}")
+        
+        # First try to get the list of servers
+        response = utils.fetch_json(
+            api_url,
+            headers=headers,
+            timeout=int(Setting().get('pdns_api_timeout')),
+            verify=Setting().get('verify_ssl_connections'),
+            method='GET'
+        )
+        # current_app.logger.info(f"PowerDNS API connection successful. Response: {response}")
+        return jsonify({'status': 'success', 'message': 'Successfully connected to PowerDNS API'})
+    except Exception as e:
+        error_msg = str(e)
+        # current_app.logger.error(f"Failed to connect to PowerDNS API: {error_msg}")
+        # current_app.logger.error(f"Full error details: {repr(e)}")
+        return jsonify({
+            'status': 'error', 
+            'message': f'Failed to connect to PowerDNS API: {error_msg}'
+        }), 400
 
 
 @admin_bp.route('/setting/dns-records', methods=['GET', 'POST'])

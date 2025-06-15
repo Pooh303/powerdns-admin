@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% set active_page = "nav-item load_balance_dashboard" %} {# Keep consistent with dashboard or create new active_page ID #}
+{% block title %}<title>Edit Load Balancer - {{ SITE_NAME }}</title>{% endblock %}
+
+{% block dashboard_stat %}
+    <div class="content-header">
+        <div class="container-fluid">
+            <div class="row mb-2">
+                <div class="col-sm-6">
+                    <h1 class="m-0 text-dark">Edit Load Balancer</h1>
+                </div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('load_balance.dashboard') }}">Load Balancers</a></li>
+                        <li class="breadcrumb-item active">Edit: {{ lb_name_display }}</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<section class="content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="row">
+                  <div class="col-12">
+                      <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible">
+                          <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                          <h5>
+                              {% if category == 'success' %}<i class="icon fas fa-check"></i> Success!
+                              {% elif category == 'error' or category == 'danger' %}<i class="icon fas fa-ban"></i> Error!
+                              {% elif category == 'warning' %}<i class="icon fas fa-exclamation-triangle"></i> Warning!
+                              {% else %}<i class="icon fas fa-info"></i> Info
+                              {% endif %}
+                          </h5>
+                          {{ message }}
+                      </div>
+                  </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <div class="card card-outline card-primary shadow">
+                    <div class="card-header">
+                        <h3 class="card-title">Edit Load Balancer: <strong>{{ lb_name_display }}</strong></h3>
+                    </div>
+                    {# Pass zone_name_dotted and record_name_dotted from Python controller to the action URL #}
+                    <form method="POST" action="{{ url_for('load_balance.edit', zone_name_dotted=zone_name_dotted, record_name_dotted=record_name_dotted) }}">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label for="lb_name_display_field">FQDN</label>
+                                <input type="text" class="form-control" id="lb_name_display_field" name="lb_name_display_field" readonly value="{{ lb_name_display }}">
+                                <small class="form-text text-muted">
+                                    The name (FQDN) of the load balancer cannot be changed here. To change the name, you would need to delete this one and create a new one.
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="lb_ttl">TTL (seconds)</label>
+                                <input type="number" class="form-control {% if 'TTL' in get_flashed_messages(category_filter=['error'])|join %}is-invalid{% endif %}" id="lb_ttl" name="lb_ttl" placeholder="TTL (e.g., 300)" min="1" required value="{{ lb_ttl | default(request.form.lb_ttl, true) | default(300, true) }}">
+                                <small class="form-text text-muted">
+                                    Time To Live in seconds. Common values: 60 (1 min), 300 (5 mins), 3600 (1 hour).
+                                    <span id="ttl_conversion_display" style="display: block; margin-top: 5px;"></span>
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="lb_port">Port</label>
+                                <input type="number" class="form-control {% if 'Port' in get_flashed_messages(category_filter=['error'])|join %}is-invalid{% endif %}" id="lb_port" name="lb_port" placeholder="Port (e.g., 80 or 443)" min="1" max="65535" required value="{{ lb_port | default(request.form.lb_port, true) | default(80, true) }}">
+                                <small class="form-text text-muted">
+                                    This port will be used for health checks (<code>ifportup</code>) on all backend servers.
+                                </small>
+                            </div>
+
+                            <label>Backend IP Servers</label>
+                            <div id="backendServersContainer">
+                                {% set ips_to_render = backend_ips if backend_ips is not none else request.form.getlist('lb_ip[]') %}
+                                {% if ips_to_render and ips_to_render|length > 0 %}
+                                    {% for ip in ips_to_render %}
+                                    <div class="form-row align-items-center backend-server-entry mb-2">
+                                        <div class="col-sm-10">
+                                            <label for="lb_ip_{{loop.index0}}" class="sr-only">IP Address</label>
+                                            <input type="text" class="form-control {% if 'Invalid IP' in get_flashed_messages(category_filter=['error'])|join and ip in get_flashed_messages(category_filter=['error'])|join %}is-invalid{% endif %}" name="lb_ip[]" id="lb_ip_{{loop.index0}}" placeholder="IP Address (e.g., 192.168.1.10)" required value="{{ ip }}">
+                                        </div>
+                                        <div class="col-sm-2">
+                                            <button type="button" class="btn btn-danger btn-sm remove-backend-server" title="Remove Server" {% if ips_to_render|length <= 1 %}style="display: none;"{% endif %}>
+                                                <i class="fa-solid fa-trash-alt"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <!-- Default first IP server entry if none are provided -->
+                                    <div class="form-row align-items-center backend-server-entry mb-2">
+                                        <div class="col-sm-10">
+                                            <label for="lb_ip_0" class="sr-only">IP Address</label>
+                                            <input type="text" class="form-control" name="lb_ip[]" id="lb_ip_0" placeholder="IP Address (e.g., 192.168.1.10)" required>
+                                        </div>
+                                        <div class="col-sm-2">
+                                            <button type="button" class="btn btn-danger btn-sm remove-backend-server" title="Remove Server" style="display: none;">
+                                                <i class="fa-solid fa-trash-alt"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <button type="button" class="btn btn-success btn-sm mt-2" id="addBackendServer">
+                                <i class="fa-solid fa-plus"></i> Add IP Server
+                            </button>
+
+                            <br><hr>
+                            <small class="form-text text-muted">
+                                <strong>Note:</strong> This feature utilizes a PowerDNS LUA record with the
+                                <a href="https://doc.powerdns.com/authoritative/lua-records/index.html#ifportup" target="_blank" rel="noopener noreferrer"><code>ifportup</code></a> function.
+                            </small>
+                        </div>
+
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary float-right">
+                                <i class="fa-solid fa-save"></i> Update Load Balancer
+                            </button>
+                            
+                            <button type="button" onclick="history.back()" class="btn btn-secondary">
+                                <i class="fa-solid fa-window-close"></i> Cancel
+                            </button>
+                            <!-- <a href="{{ url_for('load_balance.dashboard') }}" class="btn btn-secondary float-left">
+                                <i class="fa-solid fa-window-close"></i> Cancel
+                            </a> -->
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extrascripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const container = document.getElementById('backendServersContainer');
+    const addButton = document.getElementById('addBackendServer');
+    let serverEntryIndex = container.getElementsByClassName('backend-server-entry').length;
+
+    function createServerEntry(index, ipValue = '') {
+        const entryDiv = document.createElement('div');
+        entryDiv.className = 'form-row align-items-center backend-server-entry mb-2';
+        entryDiv.innerHTML = `
+            <div class="col-sm-10">
+                <label for="lb_ip_${index}" class="sr-only">IP Address</label>
+                <input type="text" class="form-control" name="lb_ip[]" id="lb_ip_${index}" placeholder="IP Address (e.g., 192.168.1.10)" required value="${ipValue}">
+            </div>
+            <div class="col-sm-2">
+                <button type="button" class="btn btn-danger btn-sm remove-backend-server" title="Remove Server">
+                    <i class="fa-solid fa-trash-alt"></i>
+                </button>
+            </div>
+        `;
+        return entryDiv;
+    }
+    
+    function updateRemoveButtonsVisibility() {
+        const entries = container.getElementsByClassName('backend-server-entry');
+        const shouldShowButtons = entries.length > 1;
+        
+        Array.from(entries).forEach(entry => {
+            const removeButton = entry.querySelector('.remove-backend-server');
+            if (removeButton) {
+                removeButton.style.display = shouldShowButtons ? 'inline-block' : 'none';
+            }
+        });
+    }
+
+    addButton.addEventListener('click', function () {
+        const newEntry = createServerEntry(serverEntryIndex);
+        container.appendChild(newEntry);
+        newEntry.querySelector('input[name="lb_ip[]"]').focus();
+        serverEntryIndex++;
+        updateRemoveButtonsVisibility();
+    });
+
+    container.addEventListener('click', function (event) {
+        const removeButton = event.target.closest('.remove-backend-server');
+        if (removeButton) {
+            const entries = container.getElementsByClassName('backend-server-entry');
+            if (entries.length > 1) {
+                removeButton.closest('.backend-server-entry').remove();
+                updateRemoveButtonsVisibility();
+            } else {
+                // If it's the last entry, just clear the input
+                const inputToClear = removeButton.closest('.backend-server-entry').querySelector('input[name="lb_ip[]"]');
+                if (inputToClear) inputToClear.value = '';
+            }
+        }
+    });
+    
+    updateRemoveButtonsVisibility(); // Initial check
+
+    // TTL Conversion Script
+    const ttlInput = document.getElementById('lb_ttl');
+    const ttlConversionDisplay = document.getElementById('ttl_conversion_display');
+    function updateTtlConversion() {
+        const seconds = parseInt(ttlInput.value, 10);
+        let displayText = '';
+        if (isNaN(seconds) || seconds < 1) {
+            ttlConversionDisplay.textContent = 'Minimum TTL is 1 second.';
+            return;
+        }
+        if (seconds >= 86400) { // Days
+            const days = Math.floor(seconds / 86400);
+            const remainingHours = Math.floor((seconds % 86400) / 3600);
+            displayText = `Approximately ${days} day(s)`;
+            if (remainingHours > 0) displayText += `, ${remainingHours} hour(s)`;
+        } else if (seconds >= 3600) { // Hours
+            const hours = Math.floor(seconds / 3600);
+            const remainingMinutes = Math.floor((seconds % 3600) / 60);
+            displayText = `Approximately ${hours} hour(s)`;
+            if (remainingMinutes > 0) displayText += `, ${remainingMinutes} minute(s)`;
+        } else if (seconds >= 60) { // Minutes
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            displayText = `Approximately ${minutes} minute(s)`;
+            if (remainingSeconds > 0) displayText += ` and ${remainingSeconds} second(s)`;
+        } else {
+            displayText = `${seconds} second(s)`;
+        }
+        ttlConversionDisplay.textContent = displayText ? `${displayText}` : '';
+    }
+    if (ttlInput && ttlConversionDisplay) {
+        ttlInput.addEventListener('input', updateTtlConversion);
+        ttlInput.addEventListener('change', updateTtlConversion);
+        updateTtlConversion(); // Initial call
+    }
+});
+</script>
+{% endblock %}

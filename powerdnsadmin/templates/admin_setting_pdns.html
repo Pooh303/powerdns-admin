@@ -34,11 +34,11 @@
                             <!-- /.card-header -->
                             <div class="card-body">
                                 {% if not SETTING.get('pdns_api_url') or not SETTING.get('pdns_api_key') or not SETTING.get('pdns_version') %}
-                                    <div class="alert alert-danger alert-dismissible">
+                                    <div class="alert alert-warning alert-dismissible">
                                         <button type="button" class="close" data-dismiss="alert" aria-hidden="true">
                                             &times;
                                         </button>
-                                        <h4><i class="icon fa fa-ban"></i> Error!</h4>
+                                        <h4><i class="icon fa fa-circle-pause"></i> Pending</h4>
                                         Please complete your PowerDNS API configuration before continuing
                                     </div>
                                 {% endif %}
@@ -70,6 +70,9 @@
                             </div>
                             <!-- /.card-body -->
                             <div class="card-footer">
+                                <button type="button" id="test_connection" class="btn btn-info float-left" title="Test Connection">
+                                    <i class="fa-solid fa-plug"></i>&nbsp;Test Connection
+                                </button>
                                 <button type="submit" class="btn btn-primary float-right" title="Save Settings">
                                     <i class="fa-solid fa-save"></i>&nbsp;Save Settings
                                 </button>
@@ -93,7 +96,7 @@
                                     your
                                     PowerDNS data. Following fields are required:</p>
                                 <dt>PowerDNS API URL</dt>
-                                <dd>Your PowerDNS API URL (eg. http://127.0.0.1:8081/).</dd>
+                                <dd>Your PowerDNS API URL (eg. http://127.0.0.1:8081/api/v1).</dd>
                                 <dt>PowerDNS API Key</dt>
                                 <dd>Your PowerDNS API key.</dd>
                                 <dt>PowerDNS Version</dt>
@@ -119,4 +122,51 @@
     {% assets "js_validation" -%}
         <script type="text/javascript" src="{{ ASSET_URL }}"></script>
     {%- endassets %}
+    <script>
+        $(document).ready(function() {
+            $('#test_connection').click(function() {
+                var apiUrl = $('#pdns_api_url').val();
+                var apiKey = $('#pdns_api_key').val();
+                
+                if (!apiUrl || !apiKey) {
+                    alert('Please fill in both API URL and API Key fields');
+                    return;
+                }
+                
+                // Show loading state
+                var $btn = $(this);
+                var originalText = $btn.html();
+                $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>&nbsp;Testing...');
+                
+                $.ajax({
+                    url: "{{ url_for('admin.test_pdns_connection') }}",
+                    type: 'POST',
+                    data: {
+                        pdns_api_url: apiUrl,
+                        pdns_api_key: apiKey,
+                        _csrf_token: "{{ csrf_token() }}"
+                    },
+                    success: function(response) {
+                        if (response.status === 'success') {
+                            alert(response.message);
+                            $('form').submit();
+                        } else {
+                            alert(response.message || 'Failed to connect to PowerDNS API');
+                        }
+                    },
+                    error: function(xhr) {
+                        var errorMsg = 'Failed to connect to PowerDNS API';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMsg = xhr.responseJSON.message;
+                        }
+                        alert(errorMsg);
+                    },
+                    complete: function() {
+                        // Reset button state
+                        $btn.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+        });
+    </script>
 {% endblock %}

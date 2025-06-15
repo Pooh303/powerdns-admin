@@ -93,6 +93,14 @@
                             </a>
                         </li>
                     {% endif %}
+                    {% if SETTING.get('allow_user_create_load_balance') or current_user.role.name in ['Administrator', 'Operator'] %}
+                        <li class="{{ 'nav-item active' if active_page == 'nav-item new_load_balance' else 'nav-item' }}">
+                            <a href="{{ url_for('load_balance.dashboard') }}" class="nav-link">
+                                <i class="nav-icon fa-solid fa-earth-asia"></i>
+                                <p>Load Balancer</p>
+                            </a>
+                        </li>
+                    {% endif %}
                     {% if SETTING.get('allow_user_remove_domain') or current_user.role.name in ['Administrator', 'Operator'] %}
                         <li class="{{ 'nav-item active' if active_page == 'remove_domain' else 'nav-item' }}">
                             <a href="{{ url_for('domain.remove') }}" class="nav-link">
@@ -125,7 +133,7 @@
                         </li>
                         <li class="{{ 'nav-item active' if active_page == 'server_configuration' else 'nav-item' }}">
                             <a href="{{ url_for('admin.server_configuration') }}" class="nav-link">
-                                <i class="nav-icon fa-solid fa-cog"></i>
+                                <i class="nav-icon fa-solid fa-wrench"></i>
                                 <p>Server Configuration</p>
                             </a>
                         </li>
@@ -233,7 +241,7 @@
 </div>
 <!-- ./wrapper -->
 <script type="text/javascript">
-    $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+    var $SCRIPT_ROOT = JSON.parse('{{ request.script_root|tojson|safe }}');
     var PDNS_VERSION = '{{ pdns_version }}';
 </script>
 {% block scripts %}
@@ -277,7 +285,6 @@
                         $('#modal-time').text("");
                         $(this).off('hidden.bs.modal');
                     });
-
                 });
 
                 // jTimeout definition
@@ -287,7 +294,7 @@
                         flashTitleSpeed: 500,
                         flashingTitleText: '**WARNING**',
                         originalTitle: document.title,
-                        timeoutAfter: {{ SETTING.get('session_timeout')|int * 60 }},
+                        timeoutAfter: parseInt('{{ SETTING.get("session_timeout")|int * 60 }}'),
                         secondsPrior: 60,
                         heartbeat: 1,
                         extendOnMouseMove: true,
@@ -295,14 +302,12 @@
                         extendUrl: '{{ url_for("index.ping") }}',
                         logoutUrl: '{{ url_for("index.logout") }}',
                         loginUrl: '{{ url_for("index.login") }}',
-
                         onClickExtend: function () {
                             // broadcast a message to tell other tabes
                             // close the session warning popup
                             var bc = new BroadcastChannel('powerdnsadmin');
                             bc.postMessage('close_session_timeout_modal');
                         },
-
                         onMouseMove: function () {
                             // if the mouse is moving while popup is present, we
                             // don't extend the session.
@@ -316,16 +321,12 @@
                                 });
                             }
                         },
-
                         onTimeout: function (jTimeout) {
                             window.location.replace("{{ url_for('index.logout') }}");
                         },
-
                         onPriorCallback: function (jTimeout) {
                             $("#modal_session_warning").modal('show');
-                            ;
                         },
-
                         onSessionExtended: function (jTimeout) {
                             $("#modal_session_warning").modal('hide');
                         }

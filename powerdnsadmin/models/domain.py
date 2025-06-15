@@ -134,8 +134,8 @@ class Domain(db.Model):
         db_domain = Domain.query.all()
         list_db_domain = [d.name for d in db_domain]
         dict_db_domain = dict((x.name, x) for x in db_domain)
-        current_app.logger.info("Found {} zones in PowerDNS-Admin".format(
-            len(list_db_domain)))
+        # current_app.logger.info("Found {} zones in PowerDNS-Admin".format(
+        #     len(list_db_domain)))
         headers = {'X-API-Key': self.PDNS_API_KEY}
         try:
             jdata = utils.fetch_json(
@@ -145,8 +145,8 @@ class Domain(db.Model):
                 timeout=int(Setting().get('pdns_api_timeout')),
                 verify=Setting().get('verify_ssl_connections'))
             list_jdomain = [d['name'].rstrip('.') for d in jdata]
-            current_app.logger.info(
-                "Found {} zones in PowerDNS server".format(len(list_jdomain)))
+            # current_app.logger.info(
+            #     "Found {} zones in PowerDNS server".format(len(list_jdomain)))
 
             try:
                 # zones should remove from db since it doesn't exist in powerdns anymore
@@ -267,7 +267,7 @@ class Domain(db.Model):
                 verify=Setting().get('verify_ssl_connections'),
                 data=post_data)
             if 'error' in jdata.keys():
-                current_app.logger.error(jdata['error'])
+                # current_app.logger.error(jdata['error'])
                 if jdata.get('http_code') == 409:
                     return {'status': 'error', 'msg': 'Zone already exists'}
                 return {'status': 'error', 'msg': jdata['error']}
@@ -887,7 +887,7 @@ class Domain(db.Model):
                 if update:
                     self.update()
                 msg_str = 'Account changed for zone {0} successfully'
-                current_app.logger.info(msg_str.format(domain_name))
+                # current_app.logger.info(msg_str.format(domain_name))
                 history = History(msg='Update zone {0} associate account {1}'.format(domain.name, 'none' if account_name == '' else account_name),
                               detail = json.dumps({
                                     'assoc_account': 'None' if account_name == '' else account_name,

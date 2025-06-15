@@ -5,7 +5,7 @@ import traceback
 import dns.name
 import dns.reversename
 from distutils.version import StrictVersion
-from flask import Blueprint, render_template, make_response, url_for, current_app, request, redirect, abort, jsonify, g, session
+from flask import Blueprint, render_template, make_response, url_for, current_app, request, redirect, abort, jsonify, g, session, flash
 from flask_login import login_required, current_user, login_manager
 
 from ..lib.utils import pretty_domain_name
@@ -57,13 +57,15 @@ def before_request():
 @can_access_domain
 def domain(domain_name):
     # Validate the domain existing in the local DB
+
     domain = Domain.query.filter(Domain.name == domain_name).first()
+    
     if not domain:
         abort(404)
 
     # Query domain's rrsets from PowerDNS API
     rrsets = Record().get_rrsets(domain.name)
-    current_app.logger.debug("Fetched rrsets: \n{}".format(pretty_json(rrsets)))
+    # current_app.logger.debug("Fetched rrsets: \n{}".format(pretty_json(rrsets)))
 
     # API server might be down, misconfigured
     if not rrsets and str(domain.type).lower() != 'slave':
@@ -78,30 +80,16 @@ def domain(domain_name):
     ttl_options = Setting().get_ttl_options()
     records = []
 
-    # Render the "records" to display in HTML datatable
-    #
-    # BUG: If we have multiple records with the same name
-    # and each record has its own comment, the display of
-    # [record-comment] may not consistent because PDNS API
-    # returns the rrsets (records, comments) has different
-    # order than its database records.
-    # TODO:
-    #   - Find a way to make it consistent, or
-    #   - Only allow one comment for that case
     if StrictVersion(Setting().get('pdns_version')) >= StrictVersion('4.0.0'):
         pretty_v6 = Setting().get('pretty_ipv6_ptr')
         for r in rrsets:
             if r['type'] in records_allow_to_edit:
                 r_name = r['name'].rstrip('.')
 
-                # If it is reverse zone and pretty_ipv6_ptr setting
-                # is enabled, we reformat the name for ipv6 records.
                 if pretty_v6 and r['type'] == 'PTR' and 'ip6.arpa' in r_name and '*' not in r_name:
                     r_name = dns.reversename.to_address(
                         dns.name.from_text(r_name))
 
-                # Create the list of records in format that
-                # PDA jinja2 template can understand.
                 index = 0
                 for record in r['records']:
                     if (len(r['comments'])>index):
@@ -119,7 +107,6 @@ def domain(domain_name):
                     index += 1
                     records.append(record_entry)
     else:
-        # Unsupported version
         abort(500)
 
     if not re.search(r'ip6\.arpa|in-addr\.arpa$', domain_name):
@@ -141,6 +128,15 @@ def domain(domain_name):
 @login_required
 @can_remove_domain
 def remove():
+
+    # START: Server Configuration Check
+    if not Setting().get('pdns_api_url') or \
+       not Setting().get('pdns_api_key') or \
+       not Setting().get('pdns_version'):
+        flash('PowerDNS API settings are not configured. Please configure them first.', 'warning')
+        return redirect(url_for('admin.setting_pdns'))
+    # END: Server Configuration Check
+
     # domains is a list of all the domains a User may access
     # Admins may access all
     # Regular users only if they are associated with the domain
@@ -161,7 +157,6 @@ def remove():
                 )).order_by(Domain.name)
 
     if request.method == 'POST':
-        # TODO Change name from 'domainid' to something else, its confusing
         domain_name = request.form['domainid']
 
         # Get domain from Database, might be None
@@ -284,6 +279,15 @@ def record_changelog(domain_name, record_name, record_type):
 @login_required
 @can_create_domain
 def add():
+
+    # START: Server Configuration Check
+    if not Setting().get('pdns_api_url') or \
+       not Setting().get('pdns_api_key') or \
+       not Setting().get('pdns_version'):
+        flash('PowerDNS API settings are not configured. Please configure them first.', 'warning')
+        return redirect(url_for('admin.setting_pdns'))
+    # END: Server Configuration Check
+
     templates = DomainTemplate.query.all()
     if request.method == 'POST':
         try:

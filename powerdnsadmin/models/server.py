@@ -4,32 +4,41 @@ from urllib.parse import urljoin
 
 from ..lib import utils
 from .setting import Setting
+from .base import db
 
 
-class Server(object):
-    """
-    This is not a model, it's just an object
-    which be assigned data from PowerDNS API
-    """
-    def __init__(self, server_id=None, server_config=None):
-        self.server_id = server_id
-        self.server_config = server_config
-        # PDNS configs
-        self.PDNS_STATS_URL = Setting().get('pdns_api_url')
-        self.PDNS_API_KEY = Setting().get('pdns_api_key')
-        self.PDNS_VERSION = Setting().get('pdns_version')
-        self.API_EXTENDED_URL = utils.pdns_api_extended_uri(self.PDNS_VERSION)
+class Server(db.Model):
+    __tablename__ = 'server'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)
+    api_url = db.Column(db.String(256), nullable=False)
+    api_key = db.Column(db.String(256), nullable=False)
+    description = db.Column(db.String(256))
+    health_records = db.relationship('ServerHealth', backref='server', lazy=True)
+
+    def __init__(self, name, api_url, api_key, description=None):
+        self.name = name
+        self.api_url = api_url
+        self.api_key = api_key
+        self.description = description
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'api_url': self.api_url,
+            'description': self.description
+        }
 
     def get_config(self):
         """
         Get server config
         """
-        headers = {'X-API-Key': self.PDNS_API_KEY}
+        headers = {'X-API-Key': self.api_key}
 
         try:
             jdata = utils.fetch_json(urljoin(
-                self.PDNS_STATS_URL, self.API_EXTENDED_URL +
-                '/servers/{0}/config'.format(self.server_id)),
+                self.api_url, '/servers/{0}/config'.format(self.id)),
                                      headers=headers,
                                      timeout=int(Setting().get('pdns_api_timeout')),
                                      method='GET',
@@ -45,12 +54,11 @@ class Server(object):
         """
         Get server statistics
         """
-        headers = {'X-API-Key': self.PDNS_API_KEY}
+        headers = {'X-API-Key': self.api_key}
 
         try:
             jdata = utils.fetch_json(urljoin(
-                self.PDNS_STATS_URL, self.API_EXTENDED_URL +
-                '/servers/{0}/statistics'.format(self.server_id)),
+                self.api_url, '/servers/{0}/statistics'.format(self.id)),
                                      headers=headers,
                                      timeout=int(Setting().get('pdns_api_timeout')),
                                      method='GET',
@@ -66,13 +74,12 @@ class Server(object):
         """
         Search zone/record/comment directly from PDNS API
         """
-        headers = {'X-API-Key': self.PDNS_API_KEY}
+        headers = {'X-API-Key': self.api_key}
 
         try:
             jdata = utils.fetch_json(urljoin(
-                self.PDNS_STATS_URL, self.API_EXTENDED_URL +
-                '/servers/{}/search-data?object_type={}&q={}'.format(
-                    self.server_id, object_type, query)),
+                self.api_url, '/servers/{}/search-data?object_type={}&q={}'.format(
+                    self.id, object_type, query)),
                                      headers=headers,
                                      timeout=int(
                                          Setting().get('pdns_api_timeout')),

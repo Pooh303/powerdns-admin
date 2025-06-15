@@ -1,0 +1,59 @@
+{
+    "account": "",
+    "api_rectify": true,
+    "catalog": "",
+    "dnssec": false,
+    "edited_serial": 2025060903,
+    "id": "poohwadol.me.",
+    "kind": "Native",
+    "last_check": 0,
+    "master_tsig_key_ids": [],
+    "masters": [],
+    "name": "poohwadol.me.",
+    "notified_serial": 0,
+    "nsec3narrow": false,
+    "nsec3param": "",
+    "rrsets": [
+        {
+            "comments": [],
+            "name": "hi.poohwadol.me.",
+            "records": [
+                {
+                    "content": "192.168.20.163",
+                    "disabled": false
+                }
+            ],
+            "ttl": 60,
+            "type": "A"
+        },
+        {
+            "comments": [],
+            "name": "web.poohwadol.me.",
+            "records": [
+                {
+                    "content": "A \"ifportup(80, {'10.4.4.10'})\"",
+                    "disabled": false
+                }
+            ],
+            "ttl": 60,
+            "type": "LUA"
+        },
+        {
+            "comments": [],
+            "name": "poohwadol.me.",
+            "records": [
+                {
+                    "content": "a.misconfigured.dns.server.invalid. hostmaster.poohwadol.me. 2025060903 10800 3600 604800 3600",
+                    "disabled": false
+                }
+            ],
+            "ttl": 3600,
+            "type": "SOA"
+        }
+    ],
+    "serial": 2025060903,
+    "slave_tsig_key_ids": [],
+    "soa_edit": "",
+    "soa_edit_api": "DEFAULT",
+    "url": "/api/v1/servers/localhost/zones/poohwadol.me."
+}

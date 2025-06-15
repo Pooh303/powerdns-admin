@@ -1,0 +1,517 @@
+{% extends "base.html" %}
+{% set active_page = "nav-item load_balance_dashboard" %}
+{% block title %}<title>View Load Balancer: {{ load_balancer.name }} - {{ SITE_NAME }}</title>{% endblock %}
+
+{% block head_meta %}
+    {{ super() }}
+    {# Add CSRF token meta tag #}
+    {% if csrf_token %}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% endif %}
+{% endblock %}
+
+{% block dashboard_stat %}
+    <div class="content-header">
+        <div class="container-fluid">
+            <div class="row mb-2">
+                <div class="col-sm-6">
+                    <h1 class="m-0 text-dark">Load Balancer Details</h1>
+                </div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('load_balance.dashboard') }}">Load Balancers</a></li>
+                        <li class="breadcrumb-item active">{{ load_balancer.name }}</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<section class="content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="row">
+                  <div class="col-12">
+                      <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible">
+                          <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                          <h5>
+                              {% if category == 'success' %}<i class="icon fas fa-check"></i> Success!
+                              {% elif category == 'error' or category == 'danger' %}<i class="icon fas fa-ban"></i> Error!
+                              {% elif category == 'warning' %}<i class="icon fas fa-exclamation-triangle"></i> Warning!
+                              {% else %}<i class="icon fas fa-info"></i> Info
+                              {% endif %}
+                          </h5>
+                          {{ message }}
+                      </div>
+                  </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        {% if load_balancer %}
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Status Card -->
+                <div class="card card-outline card-info shadow mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fa-solid fa-network-wired mr-2"></i>
+                            <strong>{{ load_balancer.name }}</strong>
+                        </h3>
+                        <div class="card-tools">
+                            {% if current_user.role.name in ['Administrator', 'Operator'] %}
+                            <a href="{{ url_for('load_balance.edit', zone_name_dotted=load_balancer.zone_actual_name, record_name_dotted=load_balancer.record_actual_name) }}" class="btn btn-sm btn-primary" title="Edit Load Balancer">
+                                <i class="fas fa-edit"></i> Edit
+                            </a>
+                            <button type="button" class="btn btn-sm btn-danger lb-delete-button"
+                                    data-html-id="lb_{{ load_balancer.zone_actual_name | replace('.', '_') }}_{{ load_balancer.record_actual_name | replace('.', '_') }}"
+                                    data-zone-name-dotted="{{ load_balancer.zone_actual_name }}"
+                                    data-record-name-dotted="{{ load_balancer.record_actual_name }}"
+                                    data-lbname="{{ load_balancer.name }}"
+                                    title="Delete Load Balancer">
+                                <i class="fas fa-trash-alt"></i> Delete
+                            </button>
+                            {% endif %}
+                            <a href="{{ url_for('domain.domain', domain_name=load_balancer.zone_actual_name.rstrip('.')) }}" class="btn btn-sm btn-info" title="Go to Zone {{ load_balancer.zone_display_name }}">
+                                <i class="fas fa-external-link-alt"></i> View Zone
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="info-box bg-light">
+                                    <span class="info-box-icon bg-{{ 'success' if load_balancer.status == 'active' else 'danger' if load_balancer.status == 'error' else 'warning' if load_balancer.status == 'warning' else 'secondary' }}">
+                                        <i class="fas fa-{{ 'check-circle' if load_balancer.status == 'active' else 'times-circle' if load_balancer.status == 'error' else 'exclamation-circle' if load_balancer.status == 'warning' else 'question-circle' }}"></i>
+                                    </span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Status</span>
+                                        <span class="info-box-number">{{ load_balancer.status | title }}</span>
+                                        <span class="info-box-text text-muted">{{ load_balancer.status_message }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-box bg-light">
+                                    <span class="info-box-icon bg-info">
+                                        <i class="fas fa-server"></i>
+                                    </span>
+                                    <div class="info-box-content">
+                                        <span class="info-box-text">Backend Servers</span>
+                                        <span class="info-box-number">{{ load_balancer.backend_servers_ips | length }}</span>
+                                        <span class="info-box-text text-muted">Active Backends</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Details -->
+                <div class="card card-outline card-info shadow mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-cog mr-2"></i>
+                            Configuration Details
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <dl class="row">
+                                    <dt class="col-sm-4">FQDN:</dt>
+                                    <dd class="col-sm-8"><code>{{ load_balancer.name }}</code></dd>
+
+                                    <dt class="col-sm-4">Zone:</dt>
+                                    <dd class="col-sm-8">{{ load_balancer.zone_display_name }}</dd>
+
+                                    <dt class="col-sm-4">TTL:</dt>
+                                    <dd class="col-sm-8">{{ load_balancer.ttl }} seconds</dd>
+
+                                    <dt class="col-sm-4">LUA Port:</dt>
+                                    <dd class="col-sm-8">{{ load_balancer.port }}</dd>
+                                </dl>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-header">
+                                        <h5 class="card-title">Raw LUA Configuration</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <pre>{{ load_balancer.raw_content }}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backend Servers -->
+                <div class="card card-outline card-info shadow mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-server mr-2"></i>
+                            Backend Servers
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        {% if load_balancer.backend_servers_ips %}
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width: 50px">#</th>
+                                            <th>IP Address</th>
+                                            <th style="width: 100px">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    {% for server_ip in load_balancer.backend_servers_ips %}
+                                        <tr>
+                                            <td>{{ loop.index }}</td>
+                                            <td><code>{{ server_ip }}</code></td>
+                                            <td>
+                                                {% if server_ip in load_balancer.server_statuses %}
+                                                    {% set status = load_balancer.server_statuses[server_ip] %}
+                                                    <span class="badge badge-{{ 'success' if status == 'up' else 'danger' }}">
+                                                        {{ status | title }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge badge-secondary">Unknown</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                No backend servers configured in the LUA record.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if load_balancer.comments %}
+                <div class="card card-outline card-info shadow mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-comments mr-2"></i>
+                            Comments
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        {% for comment in load_balancer.comments %}
+                            <div class="post">
+                                <div class="user-block">
+                                    <span class="username">
+                                        <i class="fas fa-user mr-2"></i>{{ comment.account }}
+                                    </span>
+                                    <span class="description">
+                                        <i class="fas fa-clock mr-1"></i>{{ comment.modified_at }}
+                                    </span>
+                                </div>
+                                <p class="mb-0">{{ comment.content }}</p>
+                            </div>
+                            {% if not loop.last %}<hr>{% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div>
+                    <button type="button" onclick="history.back()" class="btn btn-secondary mb-4">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+            <div class="callout callout-danger">
+                <h4><i class="fas fa-exclamation-triangle mr-2"></i>Load Balancer Not Found</h4>
+                <p>The requested load balancer could not be found or there was an error retrieving its details.</p>
+                <a href="{{ url_for('load_balance.dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left mr-2"></i>Return to Dashboard
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block head_styles %}
+{{ super() }}
+<style>
+    /* Status badge styles */
+    .badge-status-active { background-color: #28a745; color: white; }
+    .badge-status-warning { background-color: #ffc107; color: #212529; }
+    .badge-status-error { background-color: #dc3545; color: white; }
+    .badge-status-inactive { background-color: #6c757d; color: white; }
+    .badge-status-pending { background-color: #007bff; color: white; }
+
+    /* Code block styling */
+    pre {
+        max-height: 200px;
+        overflow: auto;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: .25rem;
+        padding: .5rem .75rem;
+        margin: 0;
+        font-family: monospace;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        color: #333;
+        line-height: 1.4;
+    }
+
+    /* Info box styling */
+    .info-box {
+        min-height: 100px;
+        border-radius: .25rem;
+        box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2);
+    }
+
+    .info-box-icon {
+        border-radius: .25rem 0 0 .25rem;
+        display: block;
+        float: left;
+        height: 100px;
+        width: 100px;
+        text-align: center;
+        font-size: 45px;
+        line-height: 100px;
+        background: rgba(0,0,0,0.2);
+    }
+
+    .info-box-content {
+        padding: 15px 10px;
+        margin-left: 100px;
+    }
+
+    .info-box-text {
+        display: block;
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .info-box-number {
+        display: block;
+        font-weight: 700;
+        font-size: 18px;
+    }
+
+    /* Table styling */
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,0,0,.075);
+    }
+
+    /* Card styling */
+    .card {
+        margin-bottom: 1.5rem;
+    }
+
+    .card-header {
+        background-color: rgba(0,0,0,.03);
+        border-bottom: 1px solid rgba(0,0,0,.125);
+    }
+
+    /* Comment styling */
+    .post {
+        margin-bottom: 1rem;
+    }
+
+    .user-block {
+        margin-bottom: 0.5rem;
+    }
+
+    .username {
+        font-weight: 600;
+        color: #007bff;
+    }
+
+    .description {
+        color: #6c757d;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block modals %}
+{{ super() }}
+<div class="modal fade modal-danger" id="modal_lb_delete" tabindex="-1" role="dialog" aria-labelledby="modalLbDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLbDeleteLabel">Confirm Deletion</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">×</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="lbDeleteModalPrompt"></p>
+                <div class="form-group mt-3">
+                    <label for="lbDeleteConfirmNameInput">To confirm, type "<strong><span id="lbNameToConfirm"></span></strong>" in the box below:</label>
+                    <input type="text" class="form-control" id="lbDeleteConfirmNameInput" autocomplete="off">
+                    <small id="lbDeleteError" class="form-text text-warning" style="display:none;">Name does not match.</small>
+                </div>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa-solid fa-window-close"></i> Cancel</button>
+                <button type="button" class="btn btn-danger" id="button_lb_delete_confirm" disabled><i class="nav-icon fa-solid fa-trash-alt"></i> Delete Load Balancer</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrascripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+        // --- Delete Load Balancer Modal Functionality ---
+        const deleteModalElement = document.getElementById('modal_lb_delete');
+        const deleteModal = deleteModalElement ? new bootstrap.Modal(deleteModalElement) : null;
+        const deleteModalPrompt = document.getElementById('lbDeleteModalPrompt');
+        const lbNameToConfirmSpan = document.getElementById('lbNameToConfirm');
+        const confirmNameInput = document.getElementById('lbDeleteConfirmNameInput');
+        const deleteErrorMsg = document.getElementById('lbDeleteError');
+        const deleteConfirmButton = document.getElementById('button_lb_delete_confirm');
+
+        // Declare variables in proper scope
+        let zoneNameToDeleteDotted = null;
+        let recordNameToDeleteDotted = null;
+        let lbNameToDeleteDisplay = null;
+
+        document.querySelectorAll('.lb-delete-button').forEach(button => {
+            button.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                // Get data from button attributes
+                zoneNameToDeleteDotted = this.dataset.zoneNameDotted;
+                recordNameToDeleteDotted = this.dataset.recordNameDotted;
+                lbNameToDeleteDisplay = this.dataset.lbname;
+
+                if (deleteModalPrompt && lbNameToConfirmSpan) {
+                    deleteModalPrompt.textContent = `You are about to delete the load balancer "${lbNameToDeleteDisplay}". This action cannot be undone.`;
+                    lbNameToConfirmSpan.textContent = lbNameToDeleteDisplay;
+                }
+                if (confirmNameInput) {
+                    confirmNameInput.value = '';
+                }
+                if (deleteErrorMsg) {
+                    deleteErrorMsg.style.display = 'none';
+                }
+                if (deleteConfirmButton) {
+                    deleteConfirmButton.disabled = true;
+                }
+
+                if (deleteModal) {
+                    deleteModal.show();
+                }
+            });
+        });
+
+        if (confirmNameInput && deleteConfirmButton && lbNameToConfirmSpan) {
+            confirmNameInput.addEventListener('input', function() {
+                const matches = (this.value === lbNameToConfirmSpan.textContent);
+                deleteConfirmButton.disabled = !matches;
+                if (deleteErrorMsg) {
+                    deleteErrorMsg.style.display = (this.value !== '' && !matches) ? 'block' : 'none';
+                }
+            });
+        }
+
+        if (deleteConfirmButton) {
+            deleteConfirmButton.addEventListener('click', function() {
+                if (this.disabled) return;
+
+                if (zoneNameToDeleteDotted && recordNameToDeleteDotted &&
+                    confirmNameInput && confirmNameInput.value === lbNameToConfirmSpan.textContent) {
+
+                    const deleteUrl = `/load-balance/delete/${encodeURIComponent(zoneNameToDeleteDotted)}/${encodeURIComponent(recordNameToDeleteDotted)}`;
+
+                    // Disable button and show loading state
+                    this.disabled = true;
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+                    // Get CSRF token from meta tag or input field
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                                    document.querySelector('input[name="csrf_token"]')?.value;
+
+                    if (!csrfToken) {
+                        console.error('CSRF token not found');
+                        alert('Security token missing. Please refresh the page and try again.');
+                        this.disabled = false;
+                        this.innerHTML = '<i class="nav-icon fa-solid fa-trash-alt"></i> Delete Load Balancer';
+                        return;
+                    }
+
+                    const headers = {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    };
+
+                    // Add CSRF token with multiple possible header names
+                    if (csrfToken) {
+                        headers['X-CSRF-Token'] = csrfToken;
+                        headers['X-CSRFToken'] = csrfToken;
+                        headers['X-Csrf-Token'] = csrfToken;
+                    }
+
+                    fetch(deleteUrl, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify({
+                            csrf_token: csrfToken
+                        }),
+                        credentials: 'same-origin' // Include cookies in the request
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            if (response.status === 403) {
+                                throw new Error('You do not have permission to delete this load balancer. Only Administrators and Operators can perform this action.');
+                            }
+                            return response.text().then(text => {
+                                try {
+                                    const json = JSON.parse(text);
+                                    throw new Error(json.msg || `Server error: ${response.status}`);
+                                } catch (e) {
+                                    throw new Error(`Server error: ${response.status} - ${text || response.statusText}`);
+                                }
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            window.location.href = "{{ url_for('load_balance.dashboard') }}";
+                        } else {
+                            throw new Error(data.msg || 'Failed to delete load balancer');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Deletion error:', error);
+                        alert(error.message);
+                        this.disabled = false;
+                        this.innerHTML = '<i class="nav-icon fa-solid fa-trash-alt"></i> Delete Load Balancer';
+                    });
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

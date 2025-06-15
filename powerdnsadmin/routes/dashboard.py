@@ -176,10 +176,11 @@ def dashboard():
 
     BG_DOMAIN_UPDATE = Setting().get('bg_domain_updates')
     if not BG_DOMAIN_UPDATE:
-        current_app.logger.info('Updating zones in foreground...')
+        # current_app.logger.info('Updating zones in foreground...')
         Domain().update()
     else:
-        current_app.logger.info('Updating zones in background...')
+        # current_app.logger.info('Updating zones in background...')
+        pass
 
     show_bg_domain_button = BG_DOMAIN_UPDATE
     if BG_DOMAIN_UPDATE and current_user.role.name not in ['Administrator', 'Operator']:
@@ -196,7 +197,7 @@ def dashboard():
 @login_required
 @operator_role_required
 def domains_updater():
-    current_app.logger.debug('Update zones in background')
+    # current_app.logger.debug('Update zones in background')
     d = Domain().update()
 
     response_data = {

@@ -1,0 +1,870 @@
+{% extends "base.html" %}
+{% set active_page = "nav-item load_balance_dashboard" %}
+{% block title %}<title>Load Balancer - {{ SITE_NAME }}</title>{% endblock %}
+
+{% block head %}
+{{ super() }}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+
+{% block head_meta %}
+    {{ super() }}
+    {# Assuming csrf_token() is available globally or from base.html context #}
+    {% if csrf_token %}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    {% endif %}
+{% endblock %}
+
+
+{% block dashboard_stat %}
+    <div class="content-header">
+        <div class="container-fluid">
+            <div class="row mb-2">
+                <div class="col-sm-6">
+                    <h1 class="m-0 text-dark">Load Balancer Dashboard</h1>
+                </div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item active">Load Balancer</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<section class="content">
+    <div class="container-fluid">
+        {# Flash messages #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="row">
+                  <div class="col-12">
+                      <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible">
+                          <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                          <h5>
+                              {% if category == 'success' %}<i class="icon fas fa-check"></i> Success!
+                              {% elif category == 'error' or category == 'danger' %}<i class="icon fas fa-ban"></i> Error!
+                              {% elif category == 'warning' %}<i class="icon fas fa-exclamation-triangle"></i> Warning!
+                              {% else %}<i class="icon fas fa-info"></i> Info
+                              {% endif %}
+                          </h5>
+                          {{ message }}
+                      </div>
+                  </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="row mb-3 align-items-center">
+            <div class="col-md-3"> {# Search Bar #}
+                <div class="input-group">
+                    <input type="text" id="lbSearchInput" class="form-control" placeholder="Search...">
+                    <div class="input-group-append">
+                        <button class="btn btn-secondary" type="button" id="clearLbSearch" title="Clear Search">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2"> {# Status Filter #}
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text" for="lbStatusFilterSelect">Status</label>
+                    </div>
+                    <select class="custom-select" id="lbStatusFilterSelect">
+                        <option value="all" selected>All</option>
+                        <option value="active">Active</option>
+                        <option value="warning">Warning</option>
+                        <option value="error">Error</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-2"> {# Sort By Field #}
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text" for="lbSortFieldSelect">Sort By</label>
+                    </div>
+                    <select class="custom-select" id="lbSortFieldSelect">
+                        <option value="name" selected>Domain</option>
+                        <option value="zone">Zone</option> {# Changed from "domain" to "zone" for clarity #}
+                        <option value="status">Status</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-2"> {# Sort Direction #}
+                <div class="input-group">
+                     <div class="input-group-prepend">
+                        <label class="input-group-text" for="lbSortDirectionSelect">Order</label>
+                    </div>
+                    <select class="custom-select" id="lbSortDirectionSelect">
+                        <option value="asc" selected>Ascending</option>
+                        <option value="desc">Descending</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-3 text-right"> {# Create Button #}
+                {% if SETTING.get('allow_user_create_load_balance') or current_user.role.name in ['Administrator', 'Operator'] %}
+                <a href="{{ url_for('load_balance.add') }}" class="btn btn-primary">
+                    <i class="fa-solid fa-plus"></i> New Load Balancer
+                </a>
+                {% endif %}
+                <button type="button" id="updateStatusBtn" class="btn btn-info ml-2">
+                    <i class="fas fa-sync-alt"></i> Update Status
+                </button>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" id="csrf_token">
+            </div>
+        </div>
+
+        {% if load_balancers %}
+            <div class="row mb-2">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <a data-toggle="collapse" href="#statusGuide" role="button" aria-expanded="false" aria-controls="statusGuide" class="text-dark d-flex justify-content-between align-items-center">
+                                    <span><i class="fas fa-info-circle mr-2"></i>Status Guide 
+                                    <i class="fas fa-chevron-down"></i></span>
+                                </a>
+                            </h5>
+                        </div>
+                        <div class="collapse" id="statusGuide">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge badge-status-active p-2 mr-2">Active</span>
+                                            <span>Load balancer is operational and serving traffic normally</span>
+                                        </div>
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge badge-status-warning p-2 mr-2">Warning</span>
+                                            <span>Load balancer is operational but has some issues that need attention</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge badge-status-error p-2 mr-2">Error</span>
+                                            <span>Load balancer is not operational and requires immediate attention</span>
+                                        </div>
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge badge-status-inactive p-2 mr-2">Inactive</span>
+                                            <span>Load balancer is disabled and not serving traffic</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge badge-status-pending p-2 mr-2">Pending</span>
+                                            <span>Load balancer is being configured or waiting for activation</span>
+                                        </div>
+                                        <div class="d-flex align-items-center mb-2">
+                                            <span class="badge badge-status-updating p-2 mr-2">Updating</span>
+                                            <span>Load balancer status is being updated</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="loadBalancerCardContainer">
+                {% for lb in load_balancers %}
+                <div class="col-md-4 col-lg-3 mb-4 lb-card-entry"
+                     id="{{ lb.html_id }}"
+                     data-name="{{ lb.name | lower }}"
+                     data-zone="{{ lb.zone_display_name | lower }}"
+                     data-status="{{ lb.status | lower }}">
+                    <div class="card h-100 shadow-sm lb-card lb-status-{{ lb.status | lower }}">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fa-solid fa-network-wired mr-2"></i><strong class="lb-name">{{ lb.name }}</strong>
+                            </h5>
+                            <div class="card-tools">
+                                {% if current_user.role.name in ['Administrator', 'Operator'] %}
+                                <div class="custom-control custom-switch d-inline-block mr-2">
+                                    <input type="checkbox" class="custom-control-input lb-toggle-status" 
+                                           id="lbToggle{{ lb.html_id }}"
+                                           data-html-id="{{ lb.html_id }}"
+                                           data-zone-name-dotted="{{ lb.zone_actual_name }}"
+                                           data-record-name-dotted="{{ lb.record_actual_name }}"
+                                           data-current-status="{{ lb.status | lower }}"
+                                           {% if lb.status | lower != 'inactive' %}checked{% endif %}>
+                                    <label class="custom-control-label" for="lbToggle{{ lb.html_id }}"></label>
+                                </div>
+                                {% endif %}
+                                <button type="button" class="btn btn-sm btn-tool p-0 ml-2 copy-url-btn"
+                                        data-url="{{ lb.name }}"
+                                        title="Copy URL">
+                                    <i class="fas fa-fw fa-copy"></i>
+                                </button>
+                                <div class="dropdown d-inline-block">
+                                    <button class="btn btn-sm btn-tool dropdown-toggle" type="button" id="lbActions{{ lb.html_id }}" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="lbActions{{ lb.html_id }}">
+                                        <a class="dropdown-item" href="{{ url_for('load_balance.view', zone_name_dotted=lb.zone_actual_name, record_name_dotted=lb.record_actual_name) }}"><i class="fas fa-eye mr-2"></i>View Details</a>
+                                        {% if current_user.role.name in ['Administrator', 'Operator'] %}
+                                        <a class="dropdown-item" href="{{ url_for('load_balance.edit', zone_name_dotted=lb.zone_actual_name, record_name_dotted=lb.record_actual_name) }}"><i class="fas fa-edit mr-2"></i>Edit</a>
+                                        <div class="dropdown-divider"></div>
+                                        <button type="button" class="dropdown-item text-danger lb-delete-button"
+                                                data-html-id="{{ lb.html_id }}"
+                                                data-zone-name-dotted="{{ lb.zone_actual_name }}"
+                                                data-record-name-dotted="{{ lb.record_actual_name }}"
+                                                data-lbname="{{ lb.name }}">
+                                            <i class="fas fa-trash-alt mr-2"></i>Delete
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text mb-1">
+                                <small class="text-muted">Zone: </small><label class="lb-zone small">{{ lb.zone_display_name }}</label>
+                                <a href="{{ url_for('domain.domain', domain_name=lb.zone_actual_name.rstrip('.')) }}" class="btn btn-sm btn-tool p-0 ml-2" title="Open Zone {{ lb.zone_display_name }}">
+                                <i class="fa fa-external-link-alt"></i></a>
+                            </p>
+                            <p class="card-text mb-1">
+                                <small class="text-muted">Config:</small> <span class="lb-config">{{ lb.config_summary }}</span>
+                            </p>
+                            <p class="card-text mt-2">
+                                <strong>Status:</strong>
+                                    {% if lb.status | lower == 'updating' %}
+                                        <i class="fa-solid fa-spinner fa-spin ml-1"></i>
+                                    {% else %}
+                                        <span class="badge badge-status-{{ lb.status | lower }} p-2 lb-status-text"
+                                              data-toggle="tooltip"
+                                              data-placement="top"
+                                              title="{% if lb.status | lower == 'active' %}Load balancer is operational and serving traffic normally{% endif %}">
+                                            {{ lb.status | title }}
+                                        </span>
+                                    {% endif %}
+                                <br>
+                                <small class="text-muted">{{ lb.status_message }}</small>
+                            </p>
+
+                            <!-- Server Status Information -->
+                            <!-- {% if lb.server_statuses %}
+                            <div class="mt-3">
+                                <strong>Server Status:</strong>
+                                <div class="table-responsive mt-2">
+                                    <table class="table table-sm table-bordered">
+                                        <thead class="thead-light">
+                                            <tr>
+                                                <th>IP Address</th>
+                                                <th>Status</th>
+                                                <th>Last Check</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for server_ip, status_info in lb.server_statuses.items() %}
+                                            <tr>
+                                                <td>{{ server_ip }}</td>
+                                                <td>
+                                                    <span class="badge badge-{{ 'success' if status_info.status == 'up' else 'danger' }}">
+                                                        {{ status_info.status | upper }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <small class="text-muted">{{ status_info.last_check }}</small>
+                                                </td>
+                                                <td>
+                                                    {% if status_info.error %}
+                                                    <small class="text-danger">{{ status_info.error }}</small>
+                                                    {% else %}
+                                                    <small class="text-muted">-</small>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endif %} -->
+
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+             <div id="noLbResults" class="callout callout-warning" style="display: none;">
+                <h4>No Matching Load Balancers</h4>
+                <p>Your search did not match any load balancers.</p>
+            </div>
+        {% else %}
+            <div class="callout callout-info">
+                <h4>No Load Balancers Found</h4>
+                <p>There are no load balancers configured yet.
+                    {% if SETTING.get('allow_user_create_load_balance') or current_user.role.name in ['Administrator', 'Operator'] %}
+                        You can <a href="{{ url_for('load_balance.add') }}">create one now</a>.
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block head_styles %}
+{{ super() }}
+<style>
+    .lb-status-active .card-header { background-color: #d4edda; border-bottom: 1px solid #c3e6cb; color: #155724; }
+    .badge-status-active { background-color: #28a745; color: white; }
+    .lb-status-warning .card-header { background-color: #fff3cd; border-bottom: 1px solid #ffeeba; color: #856404; }
+    .badge-status-warning { background-color: #ffc107; color: #212529; }
+    .lb-status-error .card-header { background-color: #f8d7da; border-bottom: 1px solid #f5c6cb; color: #721c24; }
+    .badge-status-error { background-color: #dc3545; color: white; }
+    .lb-status-inactive .card-header { background-color: #e2e3e5; border-bottom: 1px solid #d6d8db; color: #383d41; }
+    .badge-status-inactive { background-color: #6c757d; color: white; }
+    .lb-status-pending .card-header { background-color: #cce5ff; border-bottom: 1px solid #b8daff; color: #004085; }
+    .badge-status-pending { background-color: #007bff; color: white; }
+    /* .lb-status-updating .card-header { background-color: #e8f4f8; border-bottom: 1px solid #bee5eb; color: #0c5460; } */
+    /* .badge-status-updating { background-color: #17a2b8; color: white; } */
+    .badge-status-updating { background-color: #17a2b8; color: white; }
+    .card-title strong { font-weight: 600; }
+    
+    /* Toggle Switch Styles */
+    .custom-switch {
+        padding-left: 2.5rem;
+        margin-right: -0.5rem !important ;
+        vertical-align: middle;
+    }
+    .custom-control-input:checked ~ .custom-control-label::before {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    /* .custom-control-input:not(:checked) ~ .custom-control-label::before {
+        background-color: #6c757d;
+        border-color: #6c757d;
+    } */
+    .custom-control-input:focus ~ .custom-control-label::before {
+        box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.25);
+    }
+    .custom-control-input:disabled ~ .custom-control-label::before {
+        background-color: #e9ecef;
+    }
+    .card-tools {
+        display: flex;
+        align-items: center;
+    }
+    .card-tools .custom-switch {
+        margin-top: 0;
+    }
+</style>
+{% endblock %}
+
+{% block extrascripts %}
+{{ super() }}
+<script>
+$(document).ready(function() {
+    // Toggle collapse icon using Bootstrap's collapse events
+    $('#statusGuide').on('show.bs.collapse', function () {
+        $(this).prev().find('i.fa-chevron-down').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+    }).on('hide.bs.collapse', function () {
+        $(this).prev().find('i.fa-chevron-up').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+    });
+
+    // Initialize Bootstrap tooltips
+    $('[data-toggle="tooltip"]').tooltip();
+
+    // Update Status Button
+    const updateStatusBtn = document.getElementById('updateStatusBtn');
+    if (updateStatusBtn) {
+        updateStatusBtn.addEventListener('click', function() {
+            const button = this;
+            const originalContent = button.innerHTML;
+            
+            // Disable button and show loading state
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+
+            // Get CSRF token from meta tag or input field
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                            document.querySelector('input[name="csrf_token"]')?.value;
+
+            if (!csrfToken) {
+                console.error('CSRF token not found');
+                alert('Security token missing. Please refresh the page and try again.');
+                button.disabled = false;
+                button.innerHTML = originalContent;
+                return;
+            }
+
+            const headers = {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+
+            // Add CSRF token with multiple possible header names
+            if (csrfToken) {
+                headers['X-CSRF-Token'] = csrfToken;
+                headers['X-CSRFToken'] = csrfToken;
+                headers['X-Csrf-Token'] = csrfToken;
+            }
+
+            // Send AJAX request
+            fetch('{{ url_for("load_balance.update_status") }}', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    csrf_token: csrfToken
+                }),
+                credentials: 'same-origin' // Include cookies in the request
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        throw new Error('You do not have permission to update load balancer statuses.');
+                    }
+                    return response.text().then(text => {
+                        try {
+                            const json = JSON.parse(text);
+                            throw new Error(json.msg || `Server error: ${response.status}`);
+                        } catch (e) {
+                            throw new Error(`Server error: ${response.status} - ${text || response.statusText}`);
+                        }
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'ok') {
+                    // Reload the page to show updated statuses
+                    window.location.reload();
+                } else {
+                    throw new Error(data.msg || 'Failed to update status');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating status:', error);
+                alert(error.message);
+            })
+            .finally(() => {
+                // Restore button state
+                button.disabled = false;
+                button.innerHTML = originalContent;
+            });
+        });
+    }
+
+    // --- DOM Element References for Filtering, Sorting, and Searching ---
+    const searchInput = document.getElementById('lbSearchInput');
+    const statusFilterSelect = document.getElementById('lbStatusFilterSelect');
+    const sortFieldSelect = document.getElementById('lbSortFieldSelect');
+    const sortDirectionSelect = document.getElementById('lbSortDirectionSelect');
+    const cardContainer = document.getElementById('loadBalancerCardContainer');
+    const noResultsMessage = document.getElementById('noLbResults');
+    const clearSearchButton = document.getElementById('clearLbSearch');
+
+    // --- Store original cards for filtering/sorting without re-querying DOM ---
+    let originalCards = cardContainer ? Array.from(cardContainer.getElementsByClassName('lb-card-entry')) : [];
+
+    // --- Define order for status sorting ---
+    const statusCriticalityOrder = {
+        'error': 1,
+        'warning': 2,
+        'active': 3,
+        'pending': 4,
+        'inactive': 5,
+        'default': 6
+    };
+
+    // --- Function to Apply Filters and Sort Load Balancer Cards ---
+    function applyFiltersAndSort() {
+        if (!cardContainer) return;
+
+        const searchTerm = searchInput.value.toLowerCase();
+        const statusFilter = statusFilterSelect.value.toLowerCase();
+        const sortField = sortFieldSelect.value;
+        const sortDirection = sortDirectionSelect.value;
+
+        // Filter cards
+        let filteredCards = originalCards.filter(card => {
+            const name = card.dataset.name.toLowerCase();
+            const zone = card.dataset.zone.toLowerCase();
+            const status = card.dataset.status.toLowerCase();
+
+            const matchesSearch = name.includes(searchTerm) || zone.includes(searchTerm);
+            const matchesStatus = statusFilter === 'all' || status === statusFilter;
+
+            return matchesSearch && matchesStatus;
+        });
+
+        // Sort cards
+        filteredCards.sort((a, b) => {
+            let aValue, bValue;
+
+            if (sortField === 'status') {
+                aValue = statusCriticalityOrder[a.dataset.status] || statusCriticalityOrder.default;
+                bValue = statusCriticalityOrder[b.dataset.status] || statusCriticalityOrder.default;
+            } else {
+                aValue = a.dataset[sortField].toLowerCase();
+                bValue = b.dataset[sortField].toLowerCase();
+            }
+
+            if (sortDirection === 'asc') {
+                return aValue > bValue ? 1 : -1;
+            } else {
+                return aValue < bValue ? 1 : -1;
+            }
+        });
+
+        // Update DOM
+        cardContainer.innerHTML = '';
+        filteredCards.forEach(card => cardContainer.appendChild(card));
+
+        // Show/hide no results message
+        if (noResultsMessage) {
+            noResultsMessage.style.display = filteredCards.length === 0 ? 'block' : 'none';
+        }
+    }
+
+    // --- Event Listeners ---
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFiltersAndSort);
+    }
+
+    if (statusFilterSelect) {
+        statusFilterSelect.addEventListener('change', applyFiltersAndSort);
+    }
+
+    if (sortFieldSelect) {
+        sortFieldSelect.addEventListener('change', applyFiltersAndSort);
+    }
+
+    if (sortDirectionSelect) {
+        sortDirectionSelect.addEventListener('change', applyFiltersAndSort);
+    }
+
+    if (clearSearchButton) {
+        clearSearchButton.addEventListener('click', function() {
+            if (searchInput) {
+                searchInput.value = '';
+                applyFiltersAndSort();
+            }
+        });
+    }
+
+    // --- Delete Load Balancer Functionality ---
+    document.querySelectorAll('.lb-delete-button').forEach(button => {
+        button.addEventListener('click', function() {
+            const cardElementIdToDelete = this.dataset.htmlId;
+            const zoneNameDotted = this.dataset.zoneNameDotted;
+            const recordNameDotted = this.dataset.recordNameDotted;
+            const lbName = this.dataset.lbname;
+
+            const deleteModal = new bootstrap.Modal(document.getElementById('deleteLbModal'));
+            const confirmNameInput = document.getElementById('confirmLbName');
+            const deleteModalElement = document.getElementById('deleteLbModal');
+
+            if (confirmNameInput) {
+                confirmNameInput.value = '';
+                confirmNameInput.placeholder = `Type "${lbName}" to confirm`;
+            }
+
+            if (deleteModalElement) {
+                deleteModalElement.querySelector('.modal-title').textContent = `Delete Load Balancer: ${lbName}`;
+                deleteModalElement.querySelector('.modal-body').innerHTML = `
+                    <p>Are you sure you want to delete the load balancer <strong>${lbName}</strong>?</p>
+                    <p>This action cannot be undone.</p>
+                    <div class="form-group">
+                        <label for="confirmLbName">Type the load balancer name to confirm:</label>
+                        <input type="text" class="form-control" id="confirmLbName" placeholder="Type '${lbName}' to confirm">
+                    </div>
+                `;
+            }
+
+            deleteModal.show();
+
+            const confirmButton = deleteModalElement.querySelector('.btn-danger');
+            if (confirmButton) {
+                confirmButton.onclick = function() {
+                    if (confirmNameInput && confirmNameInput.value === lbName) {
+                        this.disabled = true;
+                        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+                        fetch(`/load-balance/delete/${zoneNameDotted}/${recordNameDotted}`, {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                            }
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                return response.json().then(errData => {
+                                    throw new Error(errData.msg || `Server error: ${response.status} ${response.statusText}`);
+                                });
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.status === 'ok') {
+                                const cardToRemove = document.getElementById(cardElementIdToDelete);
+                                if (cardToRemove) {
+                                    cardToRemove.remove();
+                                    originalCards = originalCards.filter(card => card.id !== cardElementIdToDelete);
+                                    applyFiltersAndSort();
+                                }
+                                deleteModal.hide();
+                            } else {
+                                throw new Error(data.msg || 'Failed to delete load balancer');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Deletion error:', error);
+                            alert(`Error deleting load balancer: ${error.message}`);
+                        })
+                        .finally(() => {
+                            this.disabled = false;
+                            this.innerHTML = '<i class="fas fa-trash-alt"></i> Delete Load Balancer';
+                            if (confirmNameInput) confirmNameInput.value = '';
+                        });
+                    } else {
+                        alert('Please type the load balancer name exactly to confirm deletion.');
+                    }
+                };
+            }
+        });
+    });
+
+    document.querySelectorAll('.copy-url-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const urlToCopy = this.getAttribute('data-url');
+            const iconElement = this.querySelector('i.fas.fa-fw');
+
+            if (!urlToCopy) {
+                console.warn("No URL found in data-url attribute for copy button.");
+                return;
+            }
+            if (!iconElement) {
+                console.warn("Icon element not found in copy button.");
+                // Potentially continue without icon change, or return
+            }
+
+            const copyToClipboardWithFallback = (text) => {
+                return new Promise((resolve, reject) => {
+                    // Try modern Clipboard API first (requires secure context or localhost)
+                    if (navigator.clipboard && window.isSecureContext) {
+                        navigator.clipboard.writeText(text)
+                            .then(resolve)
+                            .catch(err => {
+                                console.warn("navigator.clipboard.writeText failed, trying fallback.", err);
+                                tryFallback(text, resolve, reject); // Attempt fallback on modern API failure
+                            });
+                    } else {
+                        // Fallback for non-secure contexts or older browsers
+                        console.warn("navigator.clipboard not available or insecure context, using fallback.");
+                        tryFallback(text, resolve, reject);
+                    }
+                });
+            };
+
+            const tryFallback = (text, resolve, reject) => {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                // Styling to make it invisible and out of flow
+                textArea.style.position = 'fixed';
+                textArea.style.top = '-9999px';
+                textArea.style.left = '-9999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        resolve();
+                    } else {
+                        reject(new Error('Fallback document.execCommand("copy") failed.'));
+                    }
+                } catch (err) {
+                    reject(err);
+                } finally {
+                    document.body.removeChild(textArea);
+                }
+            };
+
+
+            copyToClipboardWithFallback(urlToCopy).then(() => {
+                // --- Success Feedback ---
+                if (iconElement) {
+                    iconElement.classList.remove('fa-copy');
+                    iconElement.classList.add('fa-check', 'text-success');
+                }
+                this.setAttribute('title', 'Copied!');
+
+                setTimeout(() => {
+                    if (iconElement) {
+                        iconElement.classList.remove('fa-check', 'text-success');
+                        iconElement.classList.add('fa-copy');
+                    }
+                }, 2000);
+
+            }).catch(err => {
+                // --- Error Feedback ---
+                console.error('Failed to copy URL: ', err);
+                // Update Bootstrap tooltip to "Copy failed!"
+                this.setAttribute('title', 'Copy failed!');
+                $(this).tooltip('hide').attr('data-original-title', 'Copy failed!').tooltip('show');
+                showGlobalError('Failed to copy URL to clipboard. You might need to copy it manually.');
+
+                 setTimeout(() => {
+                }, 2000);
+            });
+        });
+    });
+
+    // --- Global Notification Functions ---
+    function showGlobalError(message) {
+        if (typeof toastr !== 'undefined') {
+            toastr.error(message, 'Error');
+        } else {
+            console.error("Global Error:", message);
+        }
+    }
+
+    function showGlobalSuccess(message) {
+        if (typeof toastr !== 'undefined') {
+            toastr.success(message, 'Success');
+        } else {
+            console.info("Global Success:", message);
+        }
+    }
+
+    // Add toggle status functionality
+    document.querySelectorAll('.lb-toggle-status').forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const cardElementId = this.dataset.htmlId;
+            const zoneNameDotted = this.dataset.zoneNameDotted;
+            const recordNameDotted = this.dataset.recordNameDotted;
+            const currentStatus = this.dataset.currentStatus;
+            const newStatus = this.checked ? 'active' : 'disabled';
+            const toggle = this;
+            
+            // Disable toggle and show loading state
+            toggle.disabled = true;
+            const card = document.getElementById(cardElementId);
+            if (card) {
+                card.classList.add('lb-status-updating');
+            }
+
+            // Get CSRF token
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                            document.querySelector('input[name="csrf_token"]')?.value;
+
+            if (!csrfToken) {
+                console.error('CSRF token not found');
+                alert('Security token missing. Please refresh the page and try again.');
+                toggle.disabled = false;
+                if (card) {
+                    card.classList.remove('lb-status-updating');
+                }
+                return;
+            }
+
+            // Send AJAX request
+            fetch(`/load-balance/toggle-status/${zoneNameDotted}/${recordNameDotted}`, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-Token': csrfToken,
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    status: newStatus,
+                    _csrf_token: csrfToken
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'ok') {
+                    // Show success message
+                    showGlobalSuccess(`Load balancer ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully`);
+                    
+                    // Add updating state only to the toggled card
+                    if (card) {
+                        card.classList.add('lb-status-updating');
+                        const cardHeader = card.querySelector('.card-header');
+                        // if (cardHeader) {
+                        //     cardHeader.style.backgroundColor = '#e8f4f8';
+                        //     cardHeader.style.borderBottom = '1px solid #bee5eb';
+                        //     cardHeader.style.color = '#0c5460';
+                        // }
+                        const statusBadge = card.querySelector('.lb-status-text');
+                        if (statusBadge) {
+                            statusBadge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+                            statusBadge.style.backgroundColor = '#17a2b8';
+                            statusBadge.style.color = 'white';
+                        }
+                    }
+                    
+                    // Refresh the page after a short delay to show the success message
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    throw new Error(data.msg || 'Failed to update status');
+                }
+            })
+            .catch(error => {
+                console.error('Error updating status:', error);
+                showGlobalError(error.message);
+                // Revert toggle state on error
+                toggle.checked = !toggle.checked;
+            })
+            .finally(() => {
+                toggle.disabled = false;
+                if (card) {
+                    card.classList.remove('lb-status-updating');
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}
+
+{% block modals %}
+{{ super() }}
+<div class="modal fade modal-danger" id="deleteLbModal" tabindex="-1" role="dialog" aria-labelledby="deleteLbModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteLbModalLabel">Confirm Deletion</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">×</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteLbModalPrompt"></p>
+                <div class="form-group mt-3">
+                    <label for="confirmLbName">Type the load balancer name to confirm:</label>
+                    <input type="text" class="form-control" id="confirmLbName" placeholder="Type '${lbName}' to confirm">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa-solid fa-window-close"></i> Cancel</button>
+                <button type="button" class="btn btn-danger" id="button_lb_delete_confirm"><i class="nav-icon fa-solid fa-trash-alt"></i> Delete Load Balancer</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

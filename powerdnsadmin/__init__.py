@@ -16,11 +16,23 @@ def create_app(config=None):
     # Read log level from environment variable
     log_level_name = os.environ.get('PDNS_ADMIN_LOG_LEVEL', 'WARNING')
     log_level = logging.getLevelName(log_level_name.upper())
+    
+    # Create a filter to exclude specific request logs
+    class RequestLogFilter(logging.Filter):
+        def filter(self, record):
+            return not (record.levelname == 'INFO' and 
+                       record.filename == '_internal.py' and 
+                       'GET /dashboard/domains-custom/' in record.getMessage())
+
     # Setting logger
     logging.basicConfig(
        level=log_level,
         format=
         "[%(asctime)s] [%(filename)s:%(lineno)d] %(levelname)s - %(message)s")
+    
+    # Add filter to werkzeug logger
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.addFilter(RequestLogFilter())
 
     # If we use Docker + Gunicorn, adjust the
     # log handler

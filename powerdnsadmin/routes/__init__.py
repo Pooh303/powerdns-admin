@@ -8,8 +8,8 @@ from .user import user_bp
 from .dashboard import dashboard_bp
 from .domain import domain_bp
 from .admin import admin_bp
-from .api import api_bp, apilist_bp
-
+from .api import api_bp
+from .load_balance import load_balance_bp
 
 def init_app(app):
     login_manager.init_app(app)
@@ -22,7 +22,7 @@ def init_app(app):
     app.register_blueprint(domain_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(api_bp)
-    app.register_blueprint(apilist_bp)
+    app.register_blueprint(load_balance_bp)
 
     app.register_error_handler(400, handle_bad_request)
     app.register_error_handler(401, handle_unauthorized_access)

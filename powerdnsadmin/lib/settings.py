@@ -51,6 +51,10 @@ class AppSettings(object):
         'allow_user_create_domain': False,
         'allow_user_remove_domain': False,
         'allow_user_view_history': False,
+
+        'allow_user_create_load_balance': False,
+        'allow_user_view_load_balancers': True,
+
         'custom_history_header': '',
         'delete_sso_accounts': False,
         'bg_domain_updates': False,
@@ -218,7 +222,7 @@ class AppSettings(object):
             'HINFO': False,
             'KEY': False,
             'LOC': True,
-            'LUA': False,
+            'LUA': True,
             'MX': True,
             'NAPTR': False,
             'NS': True,
@@ -324,6 +328,10 @@ class AppSettings(object):
         'dnssec_admins_only': bool,
         'allow_user_create_domain': bool,
         'allow_user_remove_domain': bool,
+
+        'allow_user_create_load_balance': bool,
+        'allow_user_view_load_balancers': bool,
+
         'allow_user_view_history': bool,
         'custom_history_header': str,
         'delete_sso_accounts': bool,

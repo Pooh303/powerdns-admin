@@ -35,8 +35,12 @@ from ..models import (
 )
 from ..models.base import db
 
+# Main API blueprint with /api/v1 prefix
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
-apilist_bp = Blueprint('apilist', __name__, url_prefix='/')
+
+# Import all API routes
+from . import health
+from . import lua_health
 
 apikey_schema = ApiKeySchema(many=True)
 apikey_single_schema = ApiKeySchema()
@@ -201,7 +205,7 @@ def api_login_create_zone():
 
     msg_str = "Sending request to powerdns API {0}"
     msg = msg_str.format(request.get_json(force=True))
-    current_app.logger.debug(msg)
+    # current_app.logger.debug(msg)
 
     try:
         resp = utils.fetch_remote(urljoin(pdns_api_url, api_full_uri),
@@ -215,7 +219,7 @@ def api_login_create_zone():
         abort(500)
 
     if resp.status_code == 201:
-        current_app.logger.debug("Request to powerdns API successful")
+        # current_app.logger.debug("Request to powerdns API successful")
         data = request.get_json(force=True)
 
         domain = Domain()
@@ -230,7 +234,7 @@ def api_login_create_zone():
         history.add()
 
         if current_user.role.name not in ['Administrator', 'Operator']:
-            current_app.logger.debug("User is ordinary user, assigning created zone")
+            # current_app.logger.debug("User is ordinary user, assigning created zone")
             domain = Domain(name=data['name'].rstrip('.'))
             domain.update()
             domain.grant_privileges([current_user.id])
@@ -280,7 +284,7 @@ def api_login_delete_zone(domain_name):
             raise DomainAccessForbidden()
 
     msg_str = "Sending request to powerdns API {0}"
-    current_app.logger.debug(msg_str.format(domain_name))
+    # current_app.logger.debug(msg_str.format(domain_name))
 
     try:
         resp = utils.fetch_remote(urljoin(pdns_api_url, api_full_uri),
@@ -290,7 +294,7 @@ def api_login_delete_zone(domain_name):
                                   verify=Setting().get('verify_ssl_connections'))
 
         if resp.status_code == 204:
-            current_app.logger.debug("Request to powerdns API successful")
+            # current_app.logger.debug("Request to powerdns API successful")
 
             domain = Domain()
             domain_id = domain.get_id_by_name(domain_name)
