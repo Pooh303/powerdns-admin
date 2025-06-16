@@ -249,37 +249,32 @@
                                 <small class="text-muted">{{ lb.status_message }}</small>
                             </p>
 
-                            <!-- Server Status Information -->
-                            <!-- {% if lb.server_statuses %}
+                            <!-- Server Status -->
+                            {% if lb.server_statuses %}  {# เอาคอมเมนต์ออก #}
                             <div class="mt-3">
-                                <strong>Server Status:</strong>
-                                <div class="table-responsive mt-2">
-                                    <table class="table table-sm table-bordered">
+                                <h6 class="mb-1"><strong>Backend Servers:</strong></h6> {# เปลี่ยนเป็น h6 เพื่อความกระชับ #}
+                                <div class="table-responsive" style="max-height: 150px; overflow-y: auto;"> {# เพิ่ม max-height และ scroll #}
+                                    <table class="table table-sm table-hover table-bordered mb-0"> {# เพิ่ม table-hover, mb-0 #}
+                                        {# ไม่จำเป็นต้องมี thead ถ้าข้อมูลน้อยและชัดเจน หรือจะคงไว้ก็ได้ #}
+                                        {#
                                         <thead class="thead-light">
                                             <tr>
                                                 <th>IP Address</th>
                                                 <th>Status</th>
-                                                <th>Last Check</th>
-                                                <th>Details</th>
                                             </tr>
                                         </thead>
+                                        #}
                                         <tbody>
-                                            {% for server_ip, status_info in lb.server_statuses.items() %}
+                                            {% for server_ip, status_text in lb.server_statuses.items() %}
                                             <tr>
                                                 <td>{{ server_ip }}</td>
-                                                <td>
-                                                    <span class="badge badge-{{ 'success' if status_info.status == 'up' else 'danger' }}">
-                                                        {{ status_info.status | upper }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <small class="text-muted">{{ status_info.last_check }}</small>
-                                                </td>
-                                                <td>
-                                                    {% if status_info.error %}
-                                                    <small class="text-danger">{{ status_info.error }}</small>
+                                                <td class="text-center"> {# จัดกลาง #}
+                                                    {% if status_text == 'up' %}
+                                                        <span class="badge badge-success">UP</span>
+                                                    {% elif status_text == 'down' %}
+                                                        <span class="badge badge-danger">DOWN</span>
                                                     {% else %}
-                                                    <small class="text-muted">-</small>
+                                                        <span class="badge badge-secondary">{{ status_text | upper }}</span>
                                                     {% endif %}
                                                 </td>
                                             </tr>
@@ -288,7 +283,11 @@
                                     </table>
                                 </div>
                             </div>
-                            {% endif %} -->
+                            {% else %}
+                            <div class="mt-3">
+                                <small class="text-muted">No individual server statuses available.</small>
+                            </div>
+                            {% endif %}
 
                         </div>
                     </div>
@@ -557,85 +556,146 @@ $(document).ready(function() {
     // --- Delete Load Balancer Functionality ---
     document.querySelectorAll('.lb-delete-button').forEach(button => {
         button.addEventListener('click', function() {
+            console.log("--- Delete Button Clicked ---");
+
             const cardElementIdToDelete = this.dataset.htmlId;
             const zoneNameDotted = this.dataset.zoneNameDotted;
             const recordNameDotted = this.dataset.recordNameDotted;
-            const lbName = this.dataset.lbname;
+            const lbNameToDelete = this.dataset.lbname;
 
-            const deleteModal = new bootstrap.Modal(document.getElementById('deleteLbModal'));
-            const confirmNameInput = document.getElementById('confirmLbName');
-            const deleteModalElement = document.getElementById('deleteLbModal');
+            console.log("Button 'this':", this);
+            console.log("Dataset htmlId:", cardElementIdToDelete);
+            console.log("Dataset zoneNameDotted:", zoneNameDotted);
+            console.log("Dataset recordNameDotted:", recordNameDotted);
+            console.log("Dataset lbname (expected name for confirmation):", `"${lbNameToDelete}" (Length: ${lbNameToDelete ? lbNameToDelete.length : 'N/A'})`);
 
-            if (confirmNameInput) {
-                confirmNameInput.value = '';
-                confirmNameInput.placeholder = `Type "${lbName}" to confirm`;
+            const deleteModalElement = document.getElementById('modal_lb_delete');
+            if (!deleteModalElement) {
+                return;
+            }
+            const deleteModal = new bootstrap.Modal(deleteModalElement);
+
+            // ตั้งค่าเนื้อหาของ Modal ก่อนแสดง
+            const modalTitleElement = deleteModalElement.querySelector('.modal-title');
+            if (modalTitleElement) {
+                modalTitleElement.textContent = `Delete Load Balancer: ${lbNameToDelete}`;
+            } else {
+                console.warn("Modal title element not found for setting text.");
             }
 
-            if (deleteModalElement) {
-                deleteModalElement.querySelector('.modal-title').textContent = `Delete Load Balancer: ${lbName}`;
-                deleteModalElement.querySelector('.modal-body').innerHTML = `
-                    <p>Are you sure you want to delete the load balancer <strong>${lbName}</strong>?</p>
-                    <p>This action cannot be undone.</p>
-                    <div class="form-group">
-                        <label for="confirmLbName">Type the load balancer name to confirm:</label>
-                        <input type="text" class="form-control" id="confirmLbName" placeholder="Type '${lbName}' to confirm">
+            const modalBody = deleteModalElement.querySelector('.modal-body');
+            if (modalBody) {
+                modalBody.innerHTML = `
+                    <p>You are about to delete the load balancer "${lbNameToDelete}". This action cannot be undone.</p>
+                    <div class="form-group mt-3">
+                        <label for="confirmLbNameInputInModal">To confirm, type "${lbNameToDelete}'" in the box below:</label>
+                        <input type="text" class="form-control" id="confirmLbNameInputInModal" autocomplete="off">
+                        <small id="lbDeleteErrorTextInModal" class="form-text text-danger" style="display:none;">Name does not match.</small>
                     </div>
                 `;
+                // console.log("Modal body HTML set. Placeholder should be:", `Type '${lbNameToDelete}' to confirm`);
+            } else {
+                console.error("Modal body element not found for setting innerHTML!");
+                return;
             }
 
             deleteModal.show();
+            console.log("Delete modal shown.");
 
-            const confirmButton = deleteModalElement.querySelector('.btn-danger');
-            if (confirmButton) {
-                confirmButton.onclick = function() {
-                    if (confirmNameInput && confirmNameInput.value === lbName) {
-                        this.disabled = true;
-                        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-
-                        fetch(`/load-balance/delete/${zoneNameDotted}/${recordNameDotted}`, {
-                            method: 'POST',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Content-Type': 'application/json',
-                                'Accept': 'application/json',
-                                'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
-                            }
-                        })
-                        .then(response => {
-                            if (!response.ok) {
-                                return response.json().then(errData => {
-                                    throw new Error(errData.msg || `Server error: ${response.status} ${response.statusText}`);
-                                });
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            if (data.status === 'ok') {
-                                const cardToRemove = document.getElementById(cardElementIdToDelete);
-                                if (cardToRemove) {
-                                    cardToRemove.remove();
-                                    originalCards = originalCards.filter(card => card.id !== cardElementIdToDelete);
-                                    applyFiltersAndSort();
-                                }
-                                deleteModal.hide();
-                            } else {
-                                throw new Error(data.msg || 'Failed to delete load balancer');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Deletion error:', error);
-                            alert(`Error deleting load balancer: ${error.message}`);
-                        })
-                        .finally(() => {
-                            this.disabled = false;
-                            this.innerHTML = '<i class="fas fa-trash-alt"></i> Delete Load Balancer';
-                            if (confirmNameInput) confirmNameInput.value = '';
-                        });
-                    } else {
-                        alert('Please type the load balancer name exactly to confirm deletion.');
-                    }
-                };
+            const confirmDeleteButton = document.getElementById('button_lb_delete_confirm');
+            if (!confirmDeleteButton) {
+                console.error("Confirm delete button (#button_lb_delete_confirm) not found in modal!");
+                return;
             }
+            console.log("Confirm delete button found:", confirmDeleteButton);
+
+            const newConfirmDeleteButton = confirmDeleteButton.cloneNode(true);
+            confirmDeleteButton.parentNode.replaceChild(newConfirmDeleteButton, confirmDeleteButton);
+            console.log("Confirm delete button event listener re-attached.");
+
+            newConfirmDeleteButton.onclick = function() {
+                console.log("--- Confirm Delete Button Clicked (inside modal) ---");
+                const currentConfirmInput = document.getElementById('confirmLbNameInputInModal');
+
+                if (!currentConfirmInput) {
+                    console.error("Input field #confirmLbNameInputInModal not found inside modal at confirm click!");
+                    alert("Error: Confirmation input field not found. Please try again.");
+                    return;
+                }
+
+                const typedNameRaw = currentConfirmInput.value;
+                const typedNameTrimmed = typedNameRaw.trim();
+                const expectedNameTrimmed = lbNameToDelete.trim();
+                console.log("Expected Name for Deletion (from closure):", `"${expectedNameTrimmed}" (Length: ${expectedNameTrimmed.length})`);
+                console.log("Typed Name (raw from input):", `"${typedNameRaw}" (Length: ${typedNameRaw.length})`);
+                console.log("Typed Name (trimmed):", `"${typedNameTrimmed}" (Length: ${typedNameTrimmed.length})`);
+
+                const isMatch = typedNameTrimmed.toLowerCase() === expectedNameTrimmed.toLowerCase();
+                console.log(`Comparison: typedName.toLowerCase() ("${typedNameTrimmed.toLowerCase()}") === expectedName.toLowerCase() ("${expectedNameTrimmed.toLowerCase()}") RESULT: ${isMatch}`);
+
+                if (isMatch) {
+                    console.log("Names MATCH! Proceeding with deletion API call.");
+                    this.disabled = true;
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+                    fetch(`/load-balance/delete/${zoneNameDotted}/${recordNameDotted}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    })
+                    .then(response => {
+                        console.log("Fetch response received:", response);
+                        if (!response.ok) {
+                            return response.json().then(errData => {
+                                console.error("Fetch error response data:", errData);
+                                throw new Error(errData.msg || `Server error: ${response.status} ${response.statusText}`);
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log("Fetch success data:", data);
+                        if (data.status === 'ok') {
+                            console.log("Deletion successful via API. Removing card:", cardElementIdToDelete);
+                            const cardToRemove = document.getElementById(cardElementIdToDelete);
+                            if (cardToRemove) {
+                                cardToRemove.remove();
+                                originalCards = originalCards.filter(card => card.id !== cardElementIdToDelete);
+                                applyFiltersAndSort();
+                                console.log("Card removed from DOM and originalCards array.");
+                            } else {
+                                console.warn("Card element to remove not found in DOM:", cardElementIdToDelete);
+                            }
+                            deleteModal.hide();
+                            console.log("Delete modal hidden.");
+                            showGlobalSuccess(`Load balancer "${lbNameToDelete}" deleted successfully.`);
+                        } else {
+                            throw new Error(data.msg || 'Failed to delete load balancer (API returned non-ok status)');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Deletion process error:', error);
+                        alert(`Error deleting load balancer: ${error.message}`);
+                    })
+                    .finally(() => {
+                        console.log("Deletion fetch finally block. Resetting button.");
+                        this.disabled = false;
+                        this.innerHTML = '<i class="nav-icon fa-solid fa-trash-alt"></i> Delete Load Balancer';
+                        if (currentConfirmInput) currentConfirmInput.value = '';
+                    });
+                } else {
+                    console.warn("Names DO NOT MATCH!");
+                    alert('Please type the load balancer name exactly to confirm deletion.');
+                    if (currentConfirmInput) {
+                        currentConfirmInput.focus();
+                        currentConfirmInput.select();
+                    }
+                }
+            };
         });
     });
 
@@ -844,25 +904,27 @@ $(document).ready(function() {
 
 {% block modals %}
 {{ super() }}
-<div class="modal fade modal-danger" id="deleteLbModal" tabindex="-1" role="dialog" aria-labelledby="deleteLbModalLabel" aria-hidden="true">
+<div class="modal fade modal-danger" id="modal_lb_delete" tabindex="-1" role="dialog" aria-labelledby="modalLbDeleteLabel" aria-hidden="true"> {# เปลี่ยน ID modal ให้สอดคล้องกับ JS #}
     <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="deleteLbModalLabel">Confirm Deletion</h5>
+                <h5 class="modal-title" id="modalLbDeleteLabel">Confirm Deletion</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">×</span>
                 </button>
             </div>
             <div class="modal-body">
-                <p id="deleteLbModalPrompt"></p>
+                <p>Are you sure you want to delete the load balancer <strong id="lbNameToDeleteInModalPrompt"></strong>?</p>
+                <p>This action cannot be undone.</p>
                 <div class="form-group mt-3">
-                    <label for="confirmLbName">Type the load balancer name to confirm:</label>
-                    <input type="text" class="form-control" id="confirmLbName" placeholder="Type '${lbName}' to confirm">
+                    <label for="confirmLbNameInputInModal">Type the load balancer name to confirm:</label>
+                    <input type="text" class="form-control" id="confirmLbNameInputInModal" placeholder="Type name to confirm" autocomplete="off">
+                    <small id="lbDeleteErrorTextInModal" class="form-text text-danger" style="display:none;">Name does not match.</small>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa-solid fa-window-close"></i> Cancel</button>
-                <button type="button" class="btn btn-danger" id="button_lb_delete_confirm"><i class="nav-icon fa-solid fa-trash-alt"></i> Delete Load Balancer</button>
+                <button type="button" class="btn btn-danger" id="button_lb_delete_confirm" disabled><i class="nav-icon fa-solid fa-trash-alt"></i> Delete Load Balancer</button> {# เพิ่ม disabled เริ่มต้น #}
             </div>
         </div>
     </div>

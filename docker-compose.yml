@@ -11,7 +11,18 @@ services:
       options:
         max-size: 50m
     environment:
-      - SQLALCHEMY_DATABASE_URI=mysql://pda:changeme@host.docker.internal/pda
+      - SQLALCHEMY_DATABASE_URI=postgresql://pda:changeme@db/pda
+      - SECRET_KEY=replace_me_with_something_random
+      - SMTP_SERVER=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=your-email@gmail.com
+      - SMTP_PASSWORD=your-app-password
+      - SMTP_FROM_ADDRESS=your-email@gmail.com
+      - SMTP_USE_TLS=True
+      - SMTP_USE_SSL=False
       - GUNICORN_TIMEOUT=60
       - GUNICORN_WORKERS=2
       - GUNICORN_LOGLEVEL=DEBUG
+      - ADMIN_EMAIL=admin@example.com
+      - PORT_MONITOR_INTERVAL=60
+      - MONITORED_PORTS=53,80,443

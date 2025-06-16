@@ -1,5 +1,3 @@
-# powerdnsadmin/routes/load_balance.py
-
 import datetime
 import json
 import re
@@ -36,37 +34,37 @@ socket_pool_lock = threading.Lock()
 # Simple cache for status checks
 status_cache = {}
 status_cache_lock = threading.Lock()
-CACHE_DURATION = 30  # seconds
+CACHE_DURATION = 30
 
-def get_socket_from_pool(ip, port):
-    """Get a socket from the pool or create a new one"""
-    key = f"{ip}:{port}"
-    with socket_pool_lock:
-        if key in socket_pool:
-            sock = socket_pool[key]
-            if not sock._closed:
-                return sock
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)  # Reduced timeout to 1 second
-        socket_pool[key] = sock
-        return sock
+# def get_socket_from_pool(ip, port):
+#     """Get a socket from the pool or create a new one"""
+#     key = f"{ip}:{port}"
+#     with socket_pool_lock:
+#         if key in socket_pool:
+#             sock = socket_pool[key]
+#             if not sock._closed:
+#                 return sock
+#         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#         sock.settimeout(1)
+#         socket_pool[key] = sock
+#         return sock
 
-def get_cached_status(ip, port):
-    """Get cached status for an IP:port combination"""
-    key = f"{ip}:{port}"
-    with status_cache_lock:
-        if key in status_cache:
-            cache_time, status = status_cache[key]
-            if datetime.now() - cache_time < datetime.timedelta(seconds=CACHE_DURATION):
-                return status
-            del status_cache[key]
-    return None
+# def get_cached_status(ip, port):
+#     """Get cached status for an IP:port combination"""
+#     key = f"{ip}:{port}"
+#     with status_cache_lock:
+#         if key in status_cache:
+#             cache_time, status = status_cache[key]
+#             if datetime.now() - cache_time < datetime.timedelta(seconds=CACHE_DURATION):
+#                 return status
+#             del status_cache[key]
+#     return None
 
-def set_cached_status(ip, port, status):
-    """Cache status for an IP:port combination"""
-    key = f"{ip}:{port}"
-    with status_cache_lock:
-        status_cache[key] = (datetime.now(), status)
+# def set_cached_status(ip, port, status):
+#     """Cache status for an IP:port combination"""
+#     key = f"{ip}:{port}"
+#     with status_cache_lock:
+#         status_cache[key] = (datetime.now(), status)
 
 def check_port_status(ip, port, timeout=1):
     """
@@ -253,14 +251,14 @@ def add():
         abort(403)
 
     # For fetching zone list for the dropdown
-    domain_api_for_zones = Domain() # Use the Domain model/API wrapper
+    domain_api_for_zones = Domain()
     zones_result = domain_api_for_zones.get_domains()
     # zone_options are like "example.com" (no trailing dot)
     zone_options = sorted([zone['name'].rstrip('.') for zone in zones_result if zone.get('name')]) if zones_result else []
 
     if request.method == 'POST':
-        lb_record_subname = request.form.get('lb_record_subname', '').strip() # e.g., "web", "api", or "@"
-        lb_zone_name = request.form.get('lb_zone_name', '').strip() # e.g., "example.com"
+        lb_record_subname = request.form.get('lb_record_subname', '').strip()
+        lb_zone_name = request.form.get('lb_zone_name', '').strip()
         lb_ttl = request.form.get('lb_ttl', '').strip()
         lb_port = request.form.get('lb_port', '').strip()
         backend_ips_form = request.form.getlist('lb_ip[]')
@@ -280,7 +278,7 @@ def add():
             flash('At least one backend IP server is required.', 'error'); errors = True
         else:
             for ip_idx, ip_val in enumerate(cleaned_backend_ips):
-                if not re.match(r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$", ip_val): # Basic IPv4 regex
+                if not re.match(r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$", ip_val):
                     flash(f'Invalid IP address format for IP #{ip_idx+1}: "{ip_val}". Please use IPv4 format (e.g., 192.168.1.10).', 'error'); errors = True
 
         if errors:
@@ -290,16 +288,16 @@ def add():
         # api_record_name is the relative part, e.g., "web" or "@"
         # api_zone_name is the zone part, e.g., "example.com" (no trailing dot from form)
         api_record_name = lb_record_subname
-        api_zone_name_form = lb_zone_name # This is "example.com"
+        api_zone_name_form = lb_zone_name
 
         # --- PRE-EXISTENCE CHECK ---
         # Construct the FQDN of the record we intend to create (with trailing dot for API consistency)
         target_record_fqdn_display = f"{api_record_name}.{api_zone_name_form}" if api_record_name != "@" else api_zone_name_form
         target_record_fqdn_api = f"{api_record_name}.{api_zone_name_form}." if api_record_name != "@" else api_zone_name_form + "."
         
-        zone_fqdn_for_check = api_zone_name_form + "." # Ensure trailing dot for get_domain_info
+        zone_fqdn_for_check = api_zone_name_form + "."
 
-        domain_model_for_check = Domain() # Instance for fetching domain info
+        domain_model_for_check = Domain()
         current_app.logger.debug(f"Checking for existing LUA record '{target_record_fqdn_api}' in zone '{zone_fqdn_for_check}'")
         zone_info = domain_model_for_check.get_domain_info(zone_fqdn_for_check)
 
@@ -311,7 +309,7 @@ def add():
                     return render_template('load_balance_add.html',
                                            request_form=request.form,
                                            zone_options=zone_options,
-                                           backend_ips=cleaned_backend_ips) # Use cleaned IPs for repopulation
+                                           backend_ips=cleaned_backend_ips)
         elif zone_info is None : # get_domain_info might return None on error
              flash(f'Could not retrieve information for zone "{api_zone_name_form}" to check for existing records. Please try again.', 'error')
              current_app.logger.error(f"Failed to get domain info for zone '{zone_fqdn_for_check}' during pre-existence check.")
@@ -357,7 +355,7 @@ def add():
                 # Assuming Domain().get_id_by_name(name) exists if you need domain_id
                 # For now, passing None as domain_id for History
                 domain_obj_for_history = Domain().get_id_by_name(api_zone_name_form)
-                domain_id_for_history = domain_obj_for_history if domain_obj_for_history else None # Adjust if get_id_by_name returns dict or int
+                domain_id_for_history = domain_obj_for_history if domain_obj_for_history else None
 
                 History(msg=history_msg,
                         detail=json.dumps(detail_info),
@@ -386,7 +384,7 @@ def edit(zone_name_dotted, record_name_dotted):
             (current_user.is_authenticated and current_user.role.name in ['Administrator', 'Operator'])):
         abort(403)
 
-    domain_api = Domain() # For get_domain_info
+    domain_api = Domain()
     
     zone_name_api = zone_name_dotted + '.' if not zone_name_dotted.endswith('.') else zone_name_dotted
     record_name_api = record_name_dotted + '.' if not record_name_dotted.endswith('.') else record_name_dotted
@@ -436,18 +434,18 @@ def edit(zone_name_dotted, record_name_dotted):
         
         record_api = Record() 
         record_to_apply = [{
-            'record_name': subdomain,  # Use just the subdomain part
+            'record_name': subdomain,
             'record_type': "LUA",
             'record_ttl': int(lb_ttl),
             'record_data': new_lua_content,
-            'record_status': 'Disabled' if original_disabled else 'Active', # Preserve disabled state
-            'comment_data': original_comments # Preserve comments
+            'record_status': 'Disabled' if original_disabled else 'Active',
+            'comment_data': original_comments
         }]
         
         # current_app.logger.info(f"Attempting to apply update for LUA record: {record_name_api} in zone {zone_name_api} with data: {json.dumps(record_to_apply)}")
         
         try:
-            result = record_api.apply(zone_name_api.rstrip('.'), record_to_apply) # Zone name without trailing dot
+            result = record_api.apply(zone_name_api.rstrip('.'), record_to_apply)
 
             if result and result.get('status') == 'ok':
                 history_msg = f'Load Balancer (LUA Record) "{record_name_api.rstrip(".")}" in zone "{zone_name_api.rstrip(".")}" updated.'
@@ -517,7 +515,7 @@ def delete_lb(zone_name_dotted, record_name_dotted):
             flash(f'Error deleting load balancer: {error_msg}', 'danger')
             return redirect(url_for('load_balance.dashboard'))
     except Exception as e:
-        current_app.logger.error(f"Exception during API call for delete_lb ({record_name_api}): {e}", exc_info=True)
+        # current_app.logger.error(f"Exception during API call for delete ({record_name_api}): {e}", exc_info=True)
         if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify({'status': 'error', 'msg': str(e)}), 500
         flash(f'Error deleting load balancer: {str(e)}', 'danger')
@@ -562,7 +560,7 @@ def view(zone_name_dotted, record_name_dotted):
         'status_message': status_info.get('message', 'Status unknown'),
         'server_statuses': status_info.get('server_statuses', {}),
         'comments': found_rrset.get('comments', []), 'raw_content': content,
-        'backend_servers': [{'address': ip} for ip in ips] # Simplified for view
+        'backend_servers': [{'address': ip} for ip in ips]
     }
     return render_template('load_balance_view.html', load_balancer=load_balancer_details)
 
@@ -642,7 +640,7 @@ def update_status():
             }), 400
 
         update_load_balancer_status()
-        cleanup_socket_pool()  # Clean up socket pool after update
+        cleanup_socket_pool()
 
         return jsonify({
             'status': 'ok',
@@ -763,7 +761,6 @@ def toggle_status(zone_name_dotted, record_name_dotted):
                 "comments": target_record.get('comments', [])
             }]
         }
-
         # current_app.logger.info(f'rrset: {rrset}')
 
         # Apply the changes

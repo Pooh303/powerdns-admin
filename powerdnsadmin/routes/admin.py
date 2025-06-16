@@ -28,6 +28,7 @@ from ..lib.errors import ApiKeyCreateFail
 from ..lib.schema import ApiPlainKeySchema
 from ..lib import utils
 from urllib.parse import urljoin
+from ..services.email_service import send_test_email
 
 apikey_plain_schema = ApiPlainKeySchema(many=True)
 
@@ -279,6 +280,77 @@ def server_configuration():
                            users=users,
                            configs=configs,
                            history_number=history_number)
+
+
+@admin_bp.route('/email_notification_setting', methods=['GET', 'POST'])
+@login_required
+@operator_role_required
+def email_notification_setting():
+    if request.method == 'POST':
+        if request.form.get('test_email'):
+            # Handle test email request
+            notification_emails = request.form.get('notification_emails', '').strip()
+            if not notification_emails:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'No email addresses configured'
+                })
+
+            # Clean up and deduplicate emails
+            email_list = list(dict.fromkeys(email.strip() for email in notification_emails.split(',') if email.strip()))
+            
+            # Send test email to each address
+            success_count = 0
+            failed_emails = []
+            
+            for email in email_list:
+                try:
+                    send_test_email(email)
+                    success_count += 1
+                except Exception as e:
+                    failed_emails.append(f"{email}: {str(e)}")
+            
+            if success_count == len(email_list):
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Test emails sent successfully'
+                })
+            elif success_count > 0:
+                return jsonify({
+                    'status': 'partial',
+                    'message': f"Sent to {success_count} of {len(email_list)} addresses. Failed: {', '.join(failed_emails)}"
+                })
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': f"Failed to send test emails: {', '.join(failed_emails)}"
+                })
+        else:
+            # Handle saving settings
+            notification_emails = request.form.get('notification_emails', '').strip()
+            notify_port_up = request.form.get('notify_port_up') == 'true'
+            notify_port_down = request.form.get('notify_port_down') == 'true'
+            
+            # Clean up and deduplicate emails
+            email_list = list(dict.fromkeys(email.strip() for email in notification_emails.split(',') if email.strip()))
+            notification_emails = ','.join(email_list)
+            
+            Setting().set('notification_emails', notification_emails)
+            Setting().set('notify_port_up', notify_port_up)
+            Setting().set('notify_port_down', notify_port_down)
+            
+            flash('Email notification settings updated successfully', 'success')
+            return redirect(url_for('admin.email_notification_setting'))
+    
+    # Get current settings
+    notification_emails = Setting().get('notification_emails')
+    notify_port_up = Setting().get('notify_port_up')
+    notify_port_down = Setting().get('notify_port_down')
+    
+    return render_template('email_notification_setting.html',
+                         notification_emails=notification_emails,
+                         notify_port_up=notify_port_up,
+                         notify_port_down=notify_port_down)
 
 
 @admin_bp.route('/user/edit/<user_username>', methods=['GET', 'POST'])
@@ -1939,3 +2011,30 @@ def safe_cast(val, to_type, default=None):
         return to_type(val)
     except (ValueError, TypeError):
         return default
+
+
+# @admin_bp.route('/test_email', methods=['GET'])
+# @login_required
+# @operator_role_required
+# def test_email():
+#     """Test email configuration by sending a test email"""
+#     from ..services.email_service import send_test_email
+    
+#     # Send test email to the configured admin email
+#     success, message = send_test_email(current_app.config['ADMIN_EMAIL'])
+    
+#     if success:
+#         flash('Test email sent successfully!', 'success')
+#     else:
+#         flash(f'Failed to send test email: {message}', 'error')
+    
+#     return redirect(url_for('admin.setting_pdns'))
+
+
+@admin_bp.route('/port_status', methods=['GET'])
+@login_required
+@operator_role_required
+def port_status():
+    """View current port status"""
+    port_status = current_app.port_monitor.get_port_status()
+    return render_template('port_status.html', port_status=port_status)

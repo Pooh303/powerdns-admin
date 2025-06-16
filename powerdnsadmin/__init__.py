@@ -5,6 +5,8 @@ from flask_mail import Mail
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_session import Session
 from .lib import utils
+from powerdnsadmin.services.port_monitor_service import LuaBackendMonitorService
+from .services.email_service import init_mail
 
 
 def create_app(config=None):
@@ -111,5 +113,14 @@ def create_app(config=None):
     def inject_setting():
         setting = Setting()
         return dict(SETTING=setting)
+
+    # Initialize Flask-Mail
+    init_mail(app)
+    
+    # Initialize port monitoring service
+    port_monitor = LuaBackendMonitorService()
+    port_monitor.init_app(app)
+    port_monitor.start()
+    app.port_monitor = port_monitor
 
     return app

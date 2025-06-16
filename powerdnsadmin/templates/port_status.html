@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% set active_page = "admin_settings" %}
+{% block title %}<title>Port Status - {{ SITE_NAME }}</title>{% endblock %}
+
+{% block dashboard_stat %}
+    <div class="content-header">
+        <div class="container-fluid">
+            <div class="row mb-2">
+                <div class="col-sm-6">
+                    <h1 class="m-0 text-dark">Port Status Monitor</h1>
+                </div>
+                <div class="col-sm-6">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item active">Port Status</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <section class="content">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-12">
+                    <div class="card card-outline card-primary shadow">
+                        <div class="card-header">
+                            <h3 class="card-title">Monitored Ports</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Port</th>
+                                            <th>Status</th>
+                                            <th>Service</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for port, status in port_status.items() %}
+                                        <tr>
+                                            <td>{{ port }}</td>
+                                            <td>
+                                                {% if status == 'UP' %}
+                                                <span class="badge badge-success">UP</span>
+                                                {% else %}
+                                                <span class="badge badge-danger">DOWN</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if port == 53 %}
+                                                    DNS
+                                                {% elif port == 80 %}
+                                                    HTTP
+                                                {% elif port == 443 %}
+                                                    HTTPS
+                                                {% else %}
+                                                    Unknown
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}
+
+{% block extrascripts %}
+<script>
+    // Auto-refresh the page every 30 seconds
+    setTimeout(function() {
+        window.location.reload();
+    }, 30000);
+</script>
+{% endblock %} 

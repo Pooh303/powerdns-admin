@@ -282,6 +282,21 @@ class AppSettings(object):
             'TXT': True,
             'URI': False
         },
+
+        # Email Notification Settings
+        'notification_emails': '',
+        'notify_port_up': True,
+        'notify_port_down': True,
+
+        # SMTP Settings
+        'smtp_server': 'smtp.gmail.com',
+        'smtp_port': 587,
+        'smtp_username': '',
+        'smtp_password': '',
+
+        # LUA Backend Monitor Settings
+        'enable_lua_backend_monitor': False,
+        'lua_backend_monitor_interval': 60,
     }
 
     types = {
@@ -484,6 +499,21 @@ class AppSettings(object):
         'saml_assertion_encrypted': bool,
         'saml_cert': str,
         'saml_key': str,
+
+        # Email Notification Settings
+        'notification_emails': str,
+        'notify_port_up': bool,
+        'notify_port_down': bool,
+
+        # SMTP Settings
+        'smtp_server': str,
+        'smtp_port': int,
+        'smtp_username': str,
+        'smtp_password': str,
+
+        # LUA Backend Monitor Settings
+        'enable_lua_backend_monitor': bool,
+        'lua_backend_monitor_interval': int,
     }
 
     groups = {
