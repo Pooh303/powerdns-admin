@@ -32,7 +32,7 @@
 {% block content %}
 <section class="content">
     <div class="container-fluid">
-        {% with messages = get_flashed_messages(with_categories=true) %}
+        <!-- {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             {% for category, message in messages %}
               <div class="row">
@@ -52,7 +52,7 @@
               </div>
             {% endfor %}
           {% endif %}
-        {% endwith %}
+        {% endwith %} -->
 
         {% if load_balancer %}
         <div class="row">
@@ -125,17 +125,17 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <dl class="row">
-                                    <dt class="col-sm-4">FQDN:</dt>
-                                    <dd class="col-sm-8"><code>{{ load_balancer.name }}</code></dd>
+                                    <dt class="col-sm-2">FQDN:</dt>
+                                    <dd class="col-sm-10"><code>{{ load_balancer.name }}</code></dd>
 
-                                    <dt class="col-sm-4">Zone:</dt>
-                                    <dd class="col-sm-8">{{ load_balancer.zone_display_name }}</dd>
+                                    <dt class="col-sm-2">Zone:</dt>
+                                    <dd class="col-sm-10">{{ load_balancer.zone_display_name }}</dd>
 
-                                    <dt class="col-sm-4">TTL:</dt>
-                                    <dd class="col-sm-8">{{ load_balancer.ttl }} seconds</dd>
+                                    <dt class="col-sm-2">TTL:</dt>
+                                    <dd class="col-sm-10">{{ load_balancer.ttl }} seconds</dd>
 
-                                    <dt class="col-sm-4">LUA Port:</dt>
-                                    <dd class="col-sm-8">{{ load_balancer.port }}</dd>
+                                    <dt class="col-sm-2">LUA Port:</dt>
+                                    <dd class="col-sm-10">{{ load_balancer.port }}</dd>
                                 </dl>
                             </div>
                             <div class="col-md-6">
@@ -173,21 +173,36 @@
                                     </thead>
                                     <tbody>
                                     {% for server_ip in load_balancer.backend_servers_ips %}
-                                        <tr>
-                                            <td>{{ loop.index }}</td>
-                                            <td><code>{{ server_ip }}</code></td>
-                                            <td>
-                                                {% if server_ip in load_balancer.server_statuses %}
-                                                    {% set status = load_balancer.server_statuses[server_ip] %}
-                                                    <span class="badge badge-{{ 'success' if status == 'up' else 'danger' }}">
-                                                        {{ status | title }}
-                                                    </span>
-                                                {% else %}
-                                                    <span class="badge badge-secondary">Unknown</span>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
+                                            <tr>
+                                                <td>{{ loop.index }}</td>
+                                                <td><code>
+                                                    <!-- <i class="fas fa-server fa-fw mr-1 text-muted"></i> -->
+                                                    {{ server_ip }}</code></td>
+                                                <td>
+                                                    {% if server_ip in load_balancer.server_statuses %}
+                                                        {% set status = load_balancer.server_statuses[server_ip] %}
+                                                        {% if status == 'up' %}
+                                                            <span class="badge badge-success">
+                                                                <i class="fas fa-check-circle mr-1"></i>UP
+                                                            </span>
+                                                        {% elif status == 'down' %}
+                                                            <span class="badge badge-danger">
+                                                                <i class="fas fa-times-circle mr-1"></i>DOWN
+                                                            </span>
+                                                        {% else %}
+                                                            {# For any other status, like 'unknown' or 'pending' if they exist #}
+                                                            <span class="badge badge-secondary">
+                                                                {{ status | upper }}
+                                                            </span>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <span class="badge badge-secondary">
+                                                            <i class="fas fa-question-circle mr-1"></i>Unknown {# Optional: Icon for Unknown #}
+                                                        </span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
@@ -200,7 +215,7 @@
                     </div>
                 </div>
 
-                {% if load_balancer.comments %}
+                <!-- {% if load_balancer.comments %}
                 <div class="card card-outline card-info shadow mb-4">
                     <div class="card-header">
                         <h3 class="card-title">
@@ -225,7 +240,7 @@
                         {% endfor %}
                     </div>
                 </div>
-                {% endif %}
+                {% endif %} -->
                 
                 <div>
                     <button type="button" onclick="history.back()" class="btn btn-secondary mb-4">
@@ -405,7 +420,8 @@
                 lbNameToDeleteDisplay = this.dataset.lbname;
 
                 if (deleteModalPrompt && lbNameToConfirmSpan) {
-                    deleteModalPrompt.textContent = `You are about to delete the load balancer "${lbNameToDeleteDisplay}". This action cannot be undone.`;
+                    // deleteModalPrompt.textContent = `You are about to delete the load balancer "${lbNameToDeleteDisplay}". This action cannot be undone.`;
+                    deleteModalPrompt.textContent = `You are about to delete the load balancer. This action cannot be undone.`;
                     lbNameToConfirmSpan.textContent = lbNameToDeleteDisplay;
                 }
                 if (confirmNameInput) {

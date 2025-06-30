@@ -6,21 +6,27 @@ import datetime
 mail = Mail()
 
 def init_mail(app):
+    from ..models.setting import Setting
     """Initialize Flask-Mail with the application"""
-    app.config['MAIL_SERVER'] = app.config.get('SMTP_SERVER', 'smtp.gmail.com')
-    app.config['MAIL_PORT'] = app.config.get('SMTP_PORT', 587)
-    app.config['MAIL_USE_TLS'] = app.config.get('SMTP_USE_TLS', True)
-    app.config['MAIL_USERNAME'] = app.config.get('SMTP_USERNAME', '')
-    app.config['MAIL_PASSWORD'] = app.config.get('SMTP_PASSWORD', '')
-    app.config['MAIL_DEFAULT_SENDER'] = app.config.get('SMTP_DEFAULT_SENDER', '')
-    
+    with app.app_context():
+        app.config['MAIL_SERVER'] = Setting().get('smtp_server')
+        app.config['MAIL_PORT'] = Setting().get('smtp_port')
+        app.config['MAIL_USERNAME'] = Setting().get('smtp_username')
+        app.config['MAIL_PASSWORD'] = Setting().get('smtp_password')
+        app.config['MAIL_USE_TLS'] = Setting().get('mail_use_tls')
+        app.config['MAIL_USE_SSL'] = Setting().get('mail_use_ssl')
+        app.config['MAIL_DEFAULT_SENDER'] = Setting().get('mail_default_sender')
+        app.config['MAIL_DEBUG'] = Setting().get('mail_debug')
     mail.init_app(app)
 
 
 def send_email(subject, body, recipients):
     """Generic email sending function using Flask-Mail."""
+    print(f"GENERIC_EMAIL_PRINT: send_email called. Subject: '{subject}', Recipients: {recipients}")
+
     if not recipients:
         current_app.logger.warning("No recipients provided for email.")
+        print("GENERIC_EMAIL_PRINT: No recipients provided. Exiting.")
         return False
     try:
         if isinstance(recipients, str):
@@ -30,28 +36,42 @@ def send_email(subject, body, recipients):
             return False
 
         msg = Message(subject=subject, recipients=recipients, body=body)
+        print("GENERIC_EMAIL_PRINT: Message object created. Attempting mail.send(msg)...")
         mail.send(msg)
         current_app.logger.info(f"Email sent to {recipients} with subject: {subject}")
+        print(f"GENERIC_EMAIL_PRINT: mail.send(msg) successful for {subject} to {recipients}.")
         return True
     except Exception as e:
         current_app.logger.error(f"Failed to send email: {str(e)}")
+        print(f"GENERIC_EMAIL_PRINT: EXCEPTION in mail.send(msg) for {subject} to {recipients}: {e}")
         return False
 
 
 def send_port_status_change_alert(lua_record_name, backend_ip, port_number, new_status):
     """Sends an email when a backend port status changes for a LUA record."""
+    print(f"EMAIL_SENDER_PRINT: send_port_status_change_alert called for {lua_record_name} ({backend_ip}:{port_number}) - New status: {new_status}")
     try:
         notification_emails_str = Setting().get('notification_emails')
+        print(f"EMAIL_SENDER_PRINT: Notification emails string: '{notification_emails_str}'")
+
         if not notification_emails_str:
             current_app.logger.warning("NOTIFICATION_EMAILS not configured, cannot send port status alert.")
+            print("EMAIL_SENDER_PRINT: No notification_emails configured. Exiting.")
             return False
+
+        notify_up_setting = Setting().get('notify_port_up')
+        notify_down_setting = Setting().get('notify_port_down')
+        print(f"EMAIL_SENDER_PRINT: notify_port_up setting: {notify_up_setting}, notify_port_down setting: {notify_down_setting}")
 
         # ตรวจสอบว่าควรส่ง notification สำหรับสถานะนี้หรือไม่
         if new_status == 'UP' and not Setting().get('notify_port_up'):
             current_app.logger.info(f"Port UP notification disabled for {lua_record_name} - {backend_ip}:{port_number}")
-            return True # ไม่ใช่ error, แค่ไม่ส่ง
+            print(f"EMAIL_SENDER_PRINT: Port UP notification disabled for {lua_record_name}. Exiting.")
+            return True
+
         if new_status == 'DOWN' and not Setting().get('notify_port_down'):
             current_app.logger.info(f"Port DOWN notification disabled for {lua_record_name} - {backend_ip}:{port_number}")
+            print(f"EMAIL_SENDER_PRINT: Port DOWN notification disabled for {lua_record_name}. Exiting.")
             return True
 
         subject = f"LB Alert: {lua_record_name} - Backend {backend_ip}:{port_number} is now {new_status}"
@@ -67,10 +87,19 @@ def send_port_status_change_alert(lua_record_name, backend_ip, port_number, new_
         This is an automated notification from PowerDNS Admin.
         """
         recipients = [email.strip() for email in notification_emails_str.split(',')]
-        return send_email(subject, body, recipients)
+        print(f"EMAIL_SENDER_PRINT: Prepared to send email. Subject: '{subject}', Recipients: {recipients}")
+        
+        email_sent_successfully = send_email(subject, body, recipients)
+        
+        if email_sent_successfully:
+            print(f"EMAIL_SENDER_PRINT: send_email reported success for {lua_record_name}.")
+        else:
+            print(f"EMAIL_SENDER_PRINT: send_email reported FAILURE for {lua_record_name}.")
+        return email_sent_successfully
 
     except Exception as e:
         current_app.logger.error(f"Failed to prepare or send port status change alert: {str(e)}")
+        print(f"EMAIL_SENDER_PRINT: EXCEPTION in send_port_status_change_alert: {e}")
         return False
 
 def send_test_email(recipient_email):

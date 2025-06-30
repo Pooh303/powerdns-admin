@@ -9,16 +9,35 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/style.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/source_sans_pro.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/roboto_mono.css') }}">
-        <!-- Tell the browser to be responsive to screen width -->
         <meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport">
-        <!-- Tell Safari to not recognise telephone numbers -->
         <meta name="format-detection" content="telephone=no">
+        {% if csrf_token %}
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+        {% endif %}
         {% assets "css_main" -%}
             <link rel="stylesheet" href="{{ ASSET_URL }}">{%- endassets %}
         {% if SETTING.get('custom_css') %}
             <link rel="stylesheet" href="/static/custom/{{ SETTING.get('custom_css') }}">
         {% endif %}
-        {% block head_styles %}{% endblock %}
+        {% block head_styles %}
+            <style>
+                .flash-message-auto-close {
+                    transition: opacity 0.5s ease-out, transform 0.5s ease-out, max-height 0.5s ease-out, padding-top 0.5s ease-out, padding-bottom 0.5s ease-out, margin-bottom 0.5s ease-out;
+                    overflow: hidden;
+                    opacity: 1;
+                    transform: translateY(0);
+                    max-height: 200px; 
+                }
+                .flash-message-auto-close.fade-out {
+                    opacity: 0;
+                    transform: translateY(-20px);
+                    max-height: 0;
+                    padding-top: 0;
+                    padding-bottom: 0;
+                    margin-bottom: 0;
+                }
+            </style>
+        {% endblock %}
     {% endblock %}
 </head>
 
@@ -27,8 +46,6 @@
 <div class="wrapper">
     {% block pageheader %}
         <nav class="main-header navbar navbar-expand navbar-white navbar-light">
-            <!-- Header Navbar: style can be found in header.less -->
-            <!-- Sidebar toggle button-->
             <ul class="navbar-nav">
                 <li class="nav-item">
                     <a class="nav-link no-prompt" data-widget="pushmenu" href="#" role="button">
@@ -44,23 +61,20 @@
                 </li>
             </ul>
         </nav>
-
     {% endblock %}
-    <!-- Left side column. contains the logo and sidebar -->
+
     <aside class="main-sidebar sidebar-dark-primary">
-        <!-- Logo -->
         <a href="{{ url_for('index.index') }}" class="brand-link">
             <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="PowerDNS-Admin FavIcon"
                  class="brand-image img-circle elevation-3" style="opacity: .8">
             <span class="brand-text font-weight-light">
-        {% if SETTING.get('site_name') %}
-            <b>{{ SITE_NAME }}</b>
-        {% else %}
-            <b>PowerDNS</b>-Admin
-        {% endif %}
-      </span>
+            {% if SETTING.get('site_name') %}
+                <b>{{ SITE_NAME }}</b>
+            {% else %}
+                <b>PowerDNS</b>-Admin
+            {% endif %}
+            </span>
         </a>
-        <!-- sidebar: style can be found in sidebar.less -->
         <div class="sidebar">
             {% if current_user.id is defined %}
                 <div class="user-panel mt-3 pb-3 mb-3 d-flex">
@@ -71,12 +85,11 @@
                         <p>{{ current_user.firstname }} {{ current_user.lastname }}</p>
                         <span>
                             <a href="{{ url_for('user.profile') }}"><i class="nav-icon fa-solid fa-user"></i> Edit Profile</a>
-                            &nbsp;|&nbsp;
+                             | 
                             <a href="{{ url_for('index.logout') }}"><i class="nav-icon fa-solid fa-sign-out-alt"></i> Logout</a>
                         </span>
                     </div>
                 </div>
-                <!-- sidebar menu: : style can be found in sidebar.less -->
                 <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu">
                     <li class="nav-header">Zone Management</li>
                     <li class="{{ 'nav-item active' if active_page == 'nav-item dashboard' else 'nav-item' }}">
@@ -209,13 +222,10 @@
                 </ul>
             {% endif %}
         </div>
-        <!-- /.sidebar -->
     </aside>
 
-    <!-- Content Wrapper. Contains page content -->
     <div class="content-wrapper">
         {% block dashboard_stat %}
-            <!-- Content Header (Page header) -->
             <div class="content-header">
                 <div class="container-fluid">
                     <div class="row mb-2">
@@ -235,17 +245,42 @@
                 </div>
             </div>
         {% endblock %}
+
+        <section class="content pt-0"> 
+            <div class="container-fluid">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    {% for category, message in messages %}
+                      <div class="row">
+                          <div class="col-12">
+                              <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible flash-message-auto-close">
+                                  <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
+                                  <h5>
+                                      {% if category == 'success' %}<i class="icon fas fa-check"></i> Success!
+                                      {% elif category == 'error' or category == 'danger' %}<i class="icon fas fa-ban"></i> Error!
+                                      {% elif category == 'warning' %}<i class="icon fas fa-exclamation-triangle"></i> Warning!
+                                      {% else %}<i class="icon fas fa-info"></i> Info
+                                      {% endif %}
+                                  </h5>
+                                  {{ message }}
+                              </div>
+                          </div>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+            </div>
+        </section>
+
         {% block content %}
         {% endblock %}
     </div>
-    <!-- /.content-wrapper -->
     <footer class="main-footer">
         <strong><a href="https://github.com/PowerDNS-Admin/PowerDNS-Admin">PowerDNS-Admin</a></strong> - A PowerDNS web
         interface with advanced features.
         <span class="float-right">Version 0.4.2</span>
     </footer>
 </div>
-<!-- ./wrapper -->
 <script type="text/javascript">
     var $SCRIPT_ROOT = JSON.parse('{{ request.script_root|tojson|safe }}');
     var PDNS_VERSION = '{{ pdns_version }}';
@@ -255,16 +290,12 @@
         <script type="text/javascript" src="{{ ASSET_URL }}"></script>
         {% if SETTING.get('warn_session_timeout') and current_user.is_authenticated %}
             <script>
-                // close the session warning popup when receive
-                // a boradcast message
                 var bc = new BroadcastChannel('powerdnsadmin');
                 bc.addEventListener('message', function (e) {
                     if (e.data == 'close_session_timeout_modal') {
                         $("#modal_session_warning").modal('hide');
                     }
                 });
-
-                // Stay Signed In button click event
                 $(document.body).on("click", ".button_stay_signed_in", function (e) {
                     $.get({
                         url: $.jTimeout().options.extendUrl,
@@ -275,25 +306,18 @@
                     });
                     $.jTimeout().options.onClickExtend();
                 });
-
-                // Sign Out button click event
                 $(document.body).on("click", ".button_sign_out", function (e) {
                     window.location.replace("{{ url_for('index.logout') }}");
                 });
-
-                // Things happen when session warning popup shown
                 $(document).on('show.bs.modal', '#modal_session_warning', function () {
                     var secondsLeft = jTimeout.getSecondsTillExpiration();
                     var t = timer($('#modal-time'), secondsLeft);
-
                     $(this).on('hidden.bs.modal', function () {
                         clearInterval(t);
                         $('#modal-time').text("");
                         $(this).off('hidden.bs.modal');
                     });
                 });
-
-                // jTimeout definition
                 $(function () {
                     $.jTimeout({
                         flashTitle: true,
@@ -309,14 +333,10 @@
                         logoutUrl: '{{ url_for("index.logout") }}',
                         loginUrl: '{{ url_for("index.login") }}',
                         onClickExtend: function () {
-                            // broadcast a message to tell other tabes
-                            // close the session warning popup
                             var bc = new BroadcastChannel('powerdnsadmin');
                             bc.postMessage('close_session_timeout_modal');
                         },
                         onMouseMove: function () {
-                            // if the mouse is moving while popup is present, we
-                            // don't extend the session.
                             if (!$('#modal_session_warning').hasClass('in')) {
                                 $.get({
                                     url: $.jTimeout().options.extendUrl,
@@ -338,13 +358,11 @@
                         }
                     });
                 });
-
                 function showErrorModal(message) {
                     var modal = $('#modal_error');
                     modal.find('.modal-body p').text(message);
                     modal.modal('show');
                 }
-
                 function showSuccessModal(message) {
                     var modal = $("#modal_success");
                     modal.find('.modal-body p').text(message);
@@ -355,6 +373,28 @@
     {%- endassets %}
 {% endblock %}
 {% block extrascripts %}
+    <script>
+    $(document).ready(function() {
+        $('.flash-message-auto-close').each(function() {
+            var $alert = $(this);
+            var closeDelay = 5000; 
+            var transitionDuration = 500; 
+            if ($alert.hasClass('alert-success')) {
+                closeDelay = 3000;
+            } else if ($alert.hasClass('alert-danger') || $alert.hasClass('alert-error')) {
+                closeDelay = 7000;
+            } else if ($alert.hasClass('alert-warning')) {
+                closeDelay = 6000;
+            }
+            setTimeout(function() {
+                $alert.addClass('fade-out');
+                setTimeout(function() {
+                    $alert.remove();
+                }, transitionDuration);
+            }, closeDelay);
+        });
+    });
+    </script>
 {% endblock %}
 {% block defaultmodals %}
     <div class="modal fade modal-danger" id="modal_error">
@@ -363,7 +403,7 @@
                 <div class="modal-header">
                     <h4 class="modal-title">Error</h4>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
+                        <span aria-hidden="true">×</span>
                     </button>
                 </div>
                 <div class="modal-body">
@@ -377,14 +417,13 @@
             </div>
         </div>
     </div>
-    <!-- /.modal -->
     <div class="modal fade modal-success" id="modal_success">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h4 class="modal-title">Success</h4>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
+                        <span aria-hidden="true">×</span>
                     </button>
                 </div>
                 <div class="modal-body">

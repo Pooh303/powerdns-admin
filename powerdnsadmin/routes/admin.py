@@ -291,66 +291,160 @@ def email_notification_setting():
             # Handle test email request
             notification_emails = request.form.get('notification_emails', '').strip()
             if not notification_emails:
+                current_app.logger.warning("Test email requested but no notification emails provided on the page.")
                 return jsonify({
                     'status': 'error',
-                    'message': 'No email addresses configured'
-                })
+                    'message': 'No notification email addresses provided on the page.'
+                }), 400
 
-            # Clean up and deduplicate emails
             email_list = list(dict.fromkeys(email.strip() for email in notification_emails.split(',') if email.strip()))
-            
-            # Send test email to each address
+            if not email_list:
+                 current_app.logger.warning("Test email requested but email list is empty after processing.")
+                 return jsonify({
+                    'status': 'error',
+                    'message': 'Processed notification email list is empty.'
+                }), 400
+
             success_count = 0
             failed_emails = []
             
-            for email in email_list:
+            current_app.logger.info(f"Attempting to send test emails to: {email_list}")
+            for email_address in email_list:
                 try:
-                    send_test_email(email)
-                    success_count += 1
+                    success, message = send_test_email(email_address)
+                    if success:
+                        success_count += 1
+                    else:
+                        failed_emails.append(f"{email_address}: {message}")
                 except Exception as e:
-                    failed_emails.append(f"{email}: {str(e)}")
+                    current_app.logger.error(f"Exception while sending test email to {email_address}: {str(e)}")
+                    current_app.logger.exception("Traceback for test email sending exception:")
+                    failed_emails.append(f"{email_address}: An internal error occurred ({str(e)})")
             
             if success_count == len(email_list):
                 return jsonify({
                     'status': 'success',
-                    'message': 'Test emails sent successfully'
+                    'message': 'Test emails sent successfully to all provided addresses.'
                 })
             elif success_count > 0:
                 return jsonify({
                     'status': 'partial',
-                    'message': f"Sent to {success_count} of {len(email_list)} addresses. Failed: {', '.join(failed_emails)}"
+                    'message': f"Sent to {success_count} of {len(email_list)} addresses. Failed for: {', '.join(failed_emails)}"
                 })
             else:
+                current_app.logger.error(f"Failed to send any test emails. Failures: {failed_emails}")
                 return jsonify({
                     'status': 'error',
-                    'message': f"Failed to send test emails: {', '.join(failed_emails)}"
-                })
+                    'message': f"Failed to send test emails. Errors: {', '.join(failed_emails) if failed_emails else 'Unknown error, check server logs.'}"
+                }), 500
         else:
-            # Handle saving settings
-            notification_emails = request.form.get('notification_emails', '').strip()
-            notify_port_up = request.form.get('notify_port_up') == 'true'
-            notify_port_down = request.form.get('notify_port_down') == 'true'
+            # Handle saving ALL settings
+            # 1. Notification Email Addresses and Preferences
+            notification_emails_from_form = request.form.get('notification_emails', '').strip()
+            notify_port_up_val = request.form.get('notify_port_up') == 'true'
+            notify_port_down_val = request.form.get('notify_port_down') == 'true'
             
-            # Clean up and deduplicate emails
-            email_list = list(dict.fromkeys(email.strip() for email in notification_emails.split(',') if email.strip()))
-            notification_emails = ','.join(email_list)
+            email_list_processed = list(dict.fromkeys(email.strip() for email in notification_emails_from_form.split(',') if email.strip()))
+            processed_notification_emails = ','.join(email_list_processed)
             
-            Setting().set('notification_emails', notification_emails)
-            Setting().set('notify_port_up', notify_port_up)
-            Setting().set('notify_port_down', notify_port_down)
+            Setting().set('notification_emails', processed_notification_emails)
+            Setting().set('notify_port_up', notify_port_up_val)
+            Setting().set('notify_port_down', notify_port_down_val)
+            current_app.logger.debug(f"Saved notification_emails: {processed_notification_emails}, notify_port_up: {notify_port_up_val}, notify_port_down: {notify_port_down_val}")
+
+            # 2. SMTP Server Configuration
+            smtp_server_form = request.form.get('smtp_server', '').strip()
+            smtp_port_form_str = request.form.get('smtp_port', '').strip()
+            smtp_username_form = request.form.get('smtp_username', '').strip()
+            smtp_password_form = request.form.get('smtp_password') # Do not strip password
+            mail_default_sender_form = request.form.get('mail_default_sender', '').strip()
+            mail_use_tls_form = request.form.get('mail_use_tls') == 'true'
+            mail_use_ssl_form = request.form.get('mail_use_ssl') == 'true'
+            mail_debug_form = request.form.get('mail_debug') == 'true'
+
+            Setting().set('smtp_server', smtp_server_form)
             
-            flash('Email notification settings updated successfully', 'success')
+            smtp_port_to_save = Setting().get('smtp_port') # Get current value as default
+            if smtp_port_form_str.isdigit():
+                smtp_port_to_save = int(smtp_port_form_str)
+            Setting().set('smtp_port', smtp_port_to_save)
+
+            Setting().set('smtp_username', smtp_username_form)
+            
+            if smtp_password_form: # Only update password if a new one is provided
+                Setting().set('smtp_password', smtp_password_form)
+                current_app.logger.debug("SMTP password was provided and has been updated.")
+            else:
+                current_app.logger.debug("SMTP password field was blank; password not updated.")
+
+            Setting().set('mail_default_sender', mail_default_sender_form)
+            Setting().set('mail_use_tls', mail_use_tls_form)
+            Setting().set('mail_use_ssl', mail_use_ssl_form)
+            Setting().set('mail_debug', mail_debug_form)
+            current_app.logger.debug(f"Saved SMTP settings - Server: {smtp_server_form}, Port: {smtp_port_to_save}, User: {smtp_username_form}, TLS: {mail_use_tls_form}, SSL: {mail_use_ssl_form}, Debug: {mail_debug_form}, Sender: {mail_default_sender_form}")
+
+            # 3. LUA Backend Monitor Settings
+            enable_lua_monitor_form = request.form.get('enable_lua_backend_monitor') == 'true'
+            lua_interval_form_str = request.form.get('lua_backend_monitor_interval', '').strip()
+
+            Setting().set('enable_lua_backend_monitor', enable_lua_monitor_form)
+
+            lua_interval_to_save = Setting().get('lua_backend_monitor_interval') # Get current value as default
+            min_lua_interval = 5 # Define a minimum interval
+            if lua_interval_form_str.isdigit():
+                val = int(lua_interval_form_str)
+                if val >= min_lua_interval:
+                    lua_interval_to_save = val
+                else:
+                    current_app.logger.warning(f"LUA Interval {val} is less than minimum {min_lua_interval}, not saving new interval value.")
+                    flash(f"LUA Monitor Interval must be {min_lua_interval} seconds or greater. Value '{lua_interval_form_str}' was not saved.", "warning")
+            elif lua_interval_form_str: # If not a digit but not empty
+                current_app.logger.warning(f"Invalid LUA Interval '{lua_interval_form_str}' received, not saving new interval value.")
+                flash(f"Invalid LUA Monitor Interval '{lua_interval_form_str}'. Value not saved.", "warning")
+
+            Setting().set('lua_backend_monitor_interval', lua_interval_to_save)
+            current_app.logger.debug(f"Saved LUA Monitor settings - Enable: {enable_lua_monitor_form}, Interval: {lua_interval_to_save}")
+            
+            flash('All settings updated successfully. Some changes (like SMTP or LUA Monitor) may require an application restart to take full effect.', 'success')
             return redirect(url_for('admin.email_notification_setting'))
     
-    # Get current settings
-    notification_emails = Setting().get('notification_emails')
-    notify_port_up = Setting().get('notify_port_up')
-    notify_port_down = Setting().get('notify_port_down')
+    # GET request: Load current settings to display
+    settings_to_render = {
+        'notification_emails': Setting().get('notification_emails'),
+        'notify_port_up': Setting().get('notify_port_up'),
+        'notify_port_down': Setting().get('notify_port_down'),
+        'smtp_server': Setting().get('smtp_server'),
+        'smtp_port': Setting().get('smtp_port'),
+        'smtp_username': Setting().get('smtp_username'),
+        # Do NOT send 'smtp_password' to the template for security reasons
+        'mail_default_sender': Setting().get('mail_default_sender'),
+        'mail_use_tls': Setting().get('mail_use_tls'),
+        'mail_use_ssl': Setting().get('mail_use_ssl'),
+        'mail_debug': Setting().get('mail_debug'),
+        'enable_lua_backend_monitor': Setting().get('enable_lua_backend_monitor'),
+        'lua_backend_monitor_interval': Setting().get('lua_backend_monitor_interval'),
+    }
+    current_app.logger.debug(f"Rendering page with settings: { {k: v for k, v in settings_to_render.items() if k != 'smtp_password'} }")
+    return render_template('email_notification_setting.html', **settings_to_render)
     
-    return render_template('email_notification_setting.html',
-                         notification_emails=notification_emails,
-                         notify_port_up=notify_port_up,
-                         notify_port_down=notify_port_down)
+    # Get current settings
+    settings_to_render = {
+        'notification_emails': Setting().get('notification_emails'),
+        'notify_port_up': Setting().get('notify_port_up'),
+        'notify_port_down': Setting().get('notify_port_down'),
+
+        'smtp_server': Setting().get('smtp_server'),
+        'smtp_port': Setting().get('smtp_port'),
+        'smtp_username': Setting().get('smtp_username'),
+        'smtp_password': Setting().get('smtp_password'),
+        'mail_default_sender': Setting().get('mail_default_sender'),
+        'mail_use_tls': Setting().get('mail_use_tls'),
+        'mail_use_ssl': Setting().get('mail_use_ssl'),
+        'mail_debug': Setting().get('mail_debug'),
+    }
+
+    current_app.logger.debug(f"Rendering settings: {settings_to_render}")
+    return render_template('email_notification_setting.html', **settings_to_render)
 
 
 @admin_bp.route('/user/edit/<user_username>', methods=['GET', 'POST'])

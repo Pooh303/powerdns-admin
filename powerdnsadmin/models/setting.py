@@ -81,11 +81,29 @@ class Setting(db.Model):
 
         value = AppSettings.convert_type(setting, value)
 
-        if isinstance(value, dict) or isinstance(value, list):
-            value = json.dumps(value)
+        converted_value_for_storage = AppSettings.convert_type(setting, value)
+        current_app.logger.debug(f"Setting.set - setting: {setting}, original value: {value}, type: {type(value)}")
+        current_app.logger.debug(f"Setting.set - converted_value_for_storage: {converted_value_for_storage}, type: {type(converted_value_for_storage)}")
+
+        # if isinstance(value, dict) or isinstance(value, list):
+        #     value = json.dumps(value)
+
+        # try:
+        #     current_setting.value = value
+        #     db.session.commit()
+        #     return True
+
+        if isinstance(converted_value_for_storage, dict) or isinstance(converted_value_for_storage, list):
+            value_to_store = json.dumps(converted_value_for_storage)
+        elif isinstance(converted_value_for_storage, bool):
+            value_to_store = "True" if converted_value_for_storage else "False"
+        else:
+            value_to_store = str(converted_value_for_storage)
+
+        current_app.logger.debug(f"Setting.set - value_to_store in DB: {value_to_store}, type: {type(value_to_store)}")
 
         try:
-            current_setting.value = value
+            current_setting.value = value_to_store
             db.session.commit()
             return True
         except Exception as e:
@@ -96,21 +114,35 @@ class Setting(db.Model):
 
     def get(self, setting):
         if setting in AppSettings.defaults:
+            # 1. ดึงจาก Database ก่อนสำหรับ settings ที่ user ควรจะ override ได้
+            db_setting_value = None
+            # รายชื่อ settings ที่ควรดึงจาก DB ก่อนเสมอ
+            user_configurable_settings = [
+                'notification_emails', 'notify_port_up', 'notify_port_down',
+                'smtp_server', 'smtp_port', 'smtp_username', 'smtp_password',
+                'mail_use_tls', 'mail_use_ssl', 'mail_default_sender', 'mail_debug',
+                'enable_lua_backend_monitor', 'lua_backend_monitor_interval'
+            ]
 
+            if setting in user_configurable_settings:
+                db_record = self.query.filter(Setting.name == setting).first()
+                if db_record and db_record.value is not None: # ตรวจสอบว่ามีค่าใน DB จริงๆ
+                    db_setting_value = db_record.value
+                    current_app.logger.debug(f"Setting.get (DB FIRST) - setting: {setting}, value_from_db: {db_setting_value}")
+                    return AppSettings.convert_type(setting, db_setting_value)
+
+            # 2. ถ้าไม่เจอใน DB (หรือ setting นั้นไม่ควรดึงจาก DB ก่อน) ให้ลองดึงจาก app.config (ที่มาจาก ENV หรือ default_config.py)
             if setting.upper() in current_app.config:
-                result = current_app.config[setting.upper()]
-            else:
-                result = self.query.filter(Setting.name == setting).first()
+                config_value = current_app.config[setting.upper()]
+                current_app.logger.debug(f"Setting.get (app.config) - setting: {setting}, value_from_config: {config_value}")
+                return AppSettings.convert_type(setting, config_value)
 
-            if result is not None:
-                if hasattr(result, 'value'):
-                    result = result.value
-
-                return AppSettings.convert_type(setting, result)
-            else:
-                return AppSettings.defaults[setting]
+            # 3. ถ้าไม่เจอใน app.config ให้ใช้ค่า default จาก AppSettings
+            current_app.logger.debug(f"Setting.get (AppSettings.defaults) - setting: {setting}, using AppSettings default")
+            return AppSettings.defaults[setting]
         else:
-            current_app.logger.error('Unknown setting queried: {0}'.format(setting))
+            current_app.logger.error(f'Unknown setting queried: {setting}')
+            return None
 
     def get_group(self, group):
         if not isinstance(group, list):

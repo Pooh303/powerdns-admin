@@ -293,9 +293,12 @@ class AppSettings(object):
         'smtp_port': 587,
         'smtp_username': '',
         'smtp_password': '',
+        'mail_use_tls': True,
+        'mail_use_ssl': False,
+        'mail_default_sender': '',
 
         # LUA Backend Monitor Settings
-        'enable_lua_backend_monitor': False,
+        'enable_lua_backend_monitor': True,
         'lua_backend_monitor_interval': 60,
     }
 
@@ -510,6 +513,9 @@ class AppSettings(object):
         'smtp_port': int,
         'smtp_username': str,
         'smtp_password': str,
+        'mail_use_tls': bool,
+        'mail_use_ssl': bool,
+        'mail_default_sender': str,
 
         # LUA Backend Monitor Settings
         'enable_lua_backend_monitor': bool,
@@ -620,36 +626,49 @@ class AppSettings(object):
         if name in AppSettings.types:
             var_type = AppSettings.types[name]
 
-            # Handle boolean values
-            if var_type == bool and isinstance(value, str):
-                if value.lower() in ['True', 'true', '1'] or value is True:
-                    return True
-                else:
-                    return False
+            # Handle bool values
+            if var_type == bool:
+                if isinstance(value, str):
+                    val_lower = value.lower()
+                    if val_lower in ['true', '1', 'yes', 'on']:
+                        return True
+                    elif val_lower in ['false', '0', 'no', 'off']:
+                        return False
+                elif isinstance(value, bool):
+                    return value
+                elif isinstance(value, int) and value in [0, 1]:
+                    return bool(value)
 
             # Handle float values
-            if var_type == float:
-                return float(value)
+            if var_type == float and isinstance(value, (str, int, float)):
+                try:
+                    return float(value)
+                except ValueError:
+                    pass
 
             # Handle integer values
-            if var_type == int:
-                return int(value)
+            if var_type == int and isinstance(value, (str, int, float)):
+                try:
+                    return int(float(value))
+                except ValueError:
+                    pass
 
             if (var_type == dict or var_type == list) and isinstance(value, str) and len(value) > 0:
                 try:
                     return json.loads(value)
-                except JSONDecodeError as e:
-                    # Provide backwards compatibility for legacy non-JSON format
-                    value = value.replace("'", '"').replace('True', 'true').replace('False', 'false')
+                except JSONDecodeError:
+                    value_compat = value.replace("'", '"').replace('True', 'true').replace('False', 'false')
                     try:
-                        return json.loads(value)
-                    except JSONDecodeError as e:
-                        raise ValueError('Cannot parse json {} for variable {}'.format(value, name))
+                        return json.loads(value_compat)
+                    except JSONDecodeError:
+                        current_app.logger.error(f'Cannot parse json {value} for variable {name}')
+                        return {} if var_type == dict else []
 
             if var_type == str:
                 return str(value)
 
         return value
+
 
     @staticmethod
     def load_environment(app):

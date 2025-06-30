@@ -7,12 +7,12 @@
         <div class="container-fluid">
             <div class="row mb-2">
                 <div class="col-sm-6">
-                    <h1 class="m-0 text-dark">Email Notification Settings</h1>
+                    <h1 class="m-0 text-dark">Email & SMTP Settings</h1> {# เปลี่ยน Title เล็กน้อย #}
                 </div>
                 <div class="col-sm-6">
                     <ol class="breadcrumb float-sm-right">
                         <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Dashboard</a></li>
-                        <li class="breadcrumb-item active">Email Notification Settings</li>
+                        <li class="breadcrumb-item active">Email & SMTP Settings</li>
                     </ol>
                 </div>
             </div>
@@ -21,134 +21,186 @@
 {% endblock %}
 
 {% block content %}
-    <section class="content">
-        <div class="container-fluid">
-            <div class="row">
-                <div class="col-12 col-sm-6 col-lg-4">
-                    <form role="form" method="post" data-toggle="validator">
-                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                        <div class="card card-outline card-primary shadow">
-                            <div class="card-header">
-                                <h3 class="card-title">Load Balancer Port Status Notifications</h3>
-                            </div>
-                            <!-- /.card-header -->
-                            <div class="card-body">
-                                <div class="form-group has-feedback">
-                                    <label class="control-label" for="notification_emails">
-                                        <i class="fas fa-envelope"></i> Notification Email Addresses
-                                    </label>
-                                    <div class="input-group">
-                                        <input type="email" 
-                                               class="form-control" 
-                                               placeholder="Enter email address"
-                                               name="notification_email" 
-                                               id="notification_email"
-                                               data-error="Please input a valid email address">
-                                        <div class="input-group-append">
-                                            <button type="button" class="btn btn-primary" id="add_email">
-                                                <i class="fas fa-plus"></i> Add
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div id="email_list" class="mt-2">
-                                        {% if notification_emails %}
-                                            {% for email in notification_emails.split(',') %}
-                                                {% if email.strip() %}
-                                                    <div class="badge badge-info p-2 mr-2 mb-2">
-                                                        {{ email.strip() }}
-                                                        <button type="button" class="btn btn-sm btn-link text-white remove-email" data-email="{{ email.strip() }}">
-                                                            <i class="fas fa-times"></i>
-                                                        </button>
-                                                    </div>
-                                                {% endif %}
-                                            {% endfor %}
-                                        {% endif %}
-                                    </div>
-                                    <input type="hidden" name="notification_emails" id="notification_emails" value="{{ notification_emails or '' }}">
-                                    <span class="help-block with-errors"></span>
-                                </div>
-                                <hr>
-                                <div class="form-group">
-                                    <label class="control-label mb-3">
-                                        <i class="fas fa-bell"></i> Notification Preferences
-                                    </label>
-                                    <div class="custom-control custom-checkbox mb-2">
-                                        <input type="checkbox" 
-                                               class="custom-control-input" 
-                                               id="notify_port_up"
-                                               name="notify_port_up" 
-                                               {% if notify_port_up %}checked{% endif %}>
-                                        <label class="custom-control-label" for="notify_port_up">
-                                            Notify when port status changes to UP <i class="fas fa-arrow-up text-success"></i>
-                                        </label>
-                                    </div>
-                                    <div class="custom-control custom-checkbox">
-                                        <input type="checkbox" 
-                                               class="custom-control-input" 
-                                               id="notify_port_down"
-                                               name="notify_port_down" 
-                                               {% if notify_port_down %}checked{% endif %}>
-                                        <label class="custom-control-label" for="notify_port_down">
-                                             Notify when port status changes to DOWN <i class="fas fa-arrow-down text-danger"></i>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- /.card-body -->
-                            <div class="card-footer">
-                                <button type="button" id="test_email" class="btn btn-info float-left" title="Test Email Settings">
-                                    <i class="fas fa-paper-plane"></i>&nbsp;Send Test Email
-                                </button>
-                                <button type="submit" class="btn btn-primary float-right" title="Save Settings">
-                                    <i class="fas fa-save"></i>&nbsp;Save Settings
-                                </button>
-                            </div>
-                            <!-- /.card-footer -->
-                        </div>
-                        <!-- /.card -->
-                    </form>
-                </div>
-                <!-- /.col -->
-
-                <div class="col-12 col-sm-6 col-lg-8">
-                    <div class="card card-outline card-secondary shadow">
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12 col-md-10 col-lg-8 mx-auto"> {# จัดให้อยู่กลางๆ และไม่กว้างเกินไป #}
+                <form role="form" method="post" data-toggle="validator">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <div class="card card-outline card-primary shadow">
                         <div class="card-header">
-                            <h3 class="card-title">Email Notification Guide</h3>
+                            <h3 class="card-title">Configuration</h3>
                         </div>
                         <!-- /.card-header -->
                         <div class="card-body">
-                            <div class="alert alert-info">
-                                <h5><i class="fas fa-info-circle"></i> Configure Email Notifications</h5>
-                                <p>Set up email notifications for load balancer port status changes.</p>
+                            {# Section 1: Notification Email Addresses #}
+                            <h5><i class="fas fa-envelope"></i> Notification Email Addresses</h5>
+                            <div class="form-group has-feedback">
+                                <label class="control-label sr-only" for="notification_email_input">Notification Email Addresses</label> {# sr-only ถ้าไม่ต้องการให้ label แสดง แต่มีเพื่อ accessibility #}
+                                <div class="input-group">
+                                    <input type="email"
+                                           class="form-control"
+                                           placeholder="Enter email address to receive notifications"
+                                           id="notification_email_input"
+                                           data-error="Please input a valid email address">
+                                    <div class="input-group-append">
+                                        <button type="button" class="btn btn-outline-primary" id="add_email"> {# เปลี่ยนเป็น outline-primary #}
+                                            <i class="fas fa-plus"></i> Add
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="email_list" class="mt-2">
+                                    {% if notification_emails %}
+                                        {% for email in notification_emails.split(',') %}
+                                            {% if email.strip() %}
+                                                <span class="badge badge-info p-2 mr-2 mb-2"> {# ใช้ span แทน div สำหรับ badge ที่ inline กว่า #}
+                                                    {{ email.strip() }}
+                                                    <button type="button" class="btn btn-xs btn-link text-white remove-email ml-1" data-email="{{ email.strip() }}" aria-label="Remove {{ email.strip() }}">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                                <input type="hidden" name="notification_emails" id="notification_emails_hidden" value="{{ notification_emails or '' }}">
+                                <span class="help-block with-errors"></span>
                             </div>
-                            <dl class="dl-horizontal">
-                                <dt><i class="fas fa-envelope"></i> Email Addresses</dt>
-                                <dd>Enter one or more email addresses that should receive notifications. Each address should be on a new line.</dd>
-                                
-                                <dt><i class="fas fa-bell"></i> Notification Types</dt>
-                                <dd>Choose which port status changes should trigger notifications:</dd>
-                                <ul>
-                                    <li><strong>Port UP:</strong> Receive notifications when a port becomes available</li>
-                                    <li><strong>Port DOWN:</strong> Receive notifications when a port becomes unavailable</li>
-                                </ul>
-                                
-                                <dt><i class="fas fa-paper-plane"></i> Test Email</dt>
-                                <dd>Use the "Send Test Email" button to verify your email settings are working correctly.</dd>
-                            </dl>
+                            <hr>
+
+                            {# Section 2: Notification Preferences #}
+                            <h5><i class="fas fa-bell"></i> Notification Preferences</h5>
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox mb-2">
+                                    <input type="checkbox"
+                                           class="custom-control-input"
+                                           id="notify_port_up"
+                                           name="notify_port_up"
+                                           value="true"
+                                           {% if notify_port_up %}checked{% endif %}>
+                                    <label class="custom-control-label" for="notify_port_up">
+                                        Notify when port status changes to UP <i class="fas fa-arrow-up text-success"></i>
+                                    </label>
+                                </div>
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox"
+                                           class="custom-control-input"
+                                           id="notify_port_down"
+                                           name="notify_port_down"
+                                           value="true"
+                                           {% if notify_port_down %}checked{% endif %}>
+                                    <label class="custom-control-label" for="notify_port_down">
+                                         Notify when port status changes to DOWN <i class="fas fa-arrow-down text-danger"></i>
+                                    </label>
+                                </div>
+                            </div>
+                            <hr>
+
+                            {# Section 3: SMTP Server Configuration #}
+                            <h5><i class="fas fa-cogs"></i> SMTP Server Configuration</h5>
+                            <div class="row">
+                                <div class="col-md-8 form-group">
+                                    <label for="smtp_server">SMTP Server</label>
+                                    <input type="text" class="form-control" id="smtp_server" name="smtp_server" placeholder="e.g., smtp.gmail.com" value="{{ smtp_server or '' }}">
+                                </div>
+                                <div class="col-md-4 form-group">
+                                    <label for="smtp_port">SMTP Port</label>
+                                    <input type="number" class="form-control" id="smtp_port" name="smtp_port" placeholder="e.g., 587" value="{{ smtp_port or '' }}">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="smtp_username">SMTP Username</label>
+                                <input type="text" class="form-control" id="smtp_username" name="smtp_username" placeholder="Your SMTP username" value="{{ smtp_username or '' }}">
+                            </div>
+                            <div class="form-group">
+                                <label for="smtp_password">SMTP Password</label>
+                                <input type="password" class="form-control" id="smtp_password" name="smtp_password" placeholder="Your SMTP password">
+                                <small class="form-text text-muted">Leave blank if you don't want to change the current password.</small>
+                            </div>
+                             <div class="form-group">
+                                <label for="mail_default_sender">Default Sender Email</label>
+                                <input type="email" class="form-control" id="mail_default_sender" name="mail_default_sender" placeholder="e.g., noreply@example.com" value="{{ mail_default_sender or '' }}">
+                            </div>
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox d-inline-block mr-3">
+                                    <input type="checkbox" class="custom-control-input" id="mail_use_tls" name="mail_use_tls" value="true" {% if mail_use_tls %}checked{% endif %}>
+                                    <label class="custom-control-label" for="mail_use_tls">Use TLS</label>
+                                </div>
+                                <div class="custom-control custom-checkbox d-inline-block">
+                                    <input type="checkbox" class="custom-control-input" id="mail_use_ssl" name="mail_use_ssl" value="true" {% if mail_use_ssl %}checked{% endif %}>
+                                    <label class="custom-control-label" for="mail_use_ssl">Use SSL</label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="mail_debug" name="mail_debug" value="true" {% if mail_debug %}checked{% endif %}>
+                                    <label class="custom-control-label" for="mail_debug">Enable Mail Debug</label>
+                                    <small class="form-text text-muted">Logs detailed information. (App restart may be needed)</small>
+                                </div>
+                            </div>
+
+                            <hr> {# เพิ่มเส้นคั่นก่อน section ใหม่ #}
+
+                            {# Section 4: LUA Backend Monitor Settings #}
+                            <h5><i class="fas fa-network-wired"></i> LUA Backend Monitor Settings</h5>
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox mb-2">
+                                    <input type="checkbox"
+                                           class="custom-control-input"
+                                           id="enable_lua_backend_monitor"
+                                           name="enable_lua_backend_monitor"
+                                           value="true"
+                                           {% if enable_lua_backend_monitor %}checked{% endif %}>
+                                    <label class="custom-control-label" for="enable_lua_backend_monitor">
+                                        Enable LUA Backend Port Monitoring
+                                    </label>
+                                    <small class="form-text text-muted">
+                                        Enables monitoring of backend port status for LUA records.
+                                        Requires the LUA backend monitoring service to be running.
+                                        Changes here may require an application restart for the monitoring service.
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="lua_backend_monitor_interval">Monitor Interval (seconds)</label>
+                                <input type="number" class="form-control"
+                                       id="lua_backend_monitor_interval"
+                                       name="lua_backend_monitor_interval"
+                                       placeholder="e.g., 60"
+                                       value="{{ lua_backend_monitor_interval or '' }}"
+                                       min="5"> {# อาจจะใส่ min value ที่เหมาะสม #}
+                                <small class="form-text text-muted">
+                                    How often (in seconds) to check backend port statuses.
+                                    Changes here may require an application restart for the monitoring service.
+                                </small>
+                            </div>
+
                         </div>
+                        
                         <!-- /.card-body -->
+                        <div class="card-footer">
+                            <button type="button" id="test_email" class="btn btn-info float-left" title="Test Email Settings (uses saved SMTP settings)">
+                                <i class="fas fa-paper-plane"></i> Send Test Email
+                            </button>
+                            <button type="submit" class="btn btn-primary float-right" title="Save All Settings">
+                                <i class="fas fa-save"></i> Save All Settings
+                            </button>
+                        </div>
+                        <!-- /.card-footer -->
                     </div>
                     <!-- /.card -->
-                </div>
-                <!-- /.col -->
+                </form>
             </div>
-            <!-- /.row -->
+            <!-- /.col -->
         </div>
-        <!-- /.container-fluid -->
-    </section>
+        <!-- /.row -->
+    </div>
+    <!-- /.container-fluid -->
+</section>
 {% endblock %}
 
 {% block extrascripts %}
+    {# JavaScript เหมือนเดิม #}
     {% assets "js_validation" -%}
         <script type="text/javascript" src="{{ ASSET_URL }}"></script>
     {%- endassets %}
@@ -156,35 +208,40 @@
         $(document).ready(function() {
             // Function to update hidden input with all emails
             function updateEmailList() {
-                var emails = new Set(); // Use Set to ensure uniqueness
+                var emails = new Set();
                 $('#email_list .badge').each(function() {
-                    emails.add($(this).text().trim());
+                    var emailText = $(this).contents().filter(function() {
+                        return this.nodeType === 3; // Node.TEXT_NODE
+                    }).text().trim();
+                    if(emailText) {
+                        emails.add(emailText);
+                    }
                 });
-                $('#notification_emails').val(Array.from(emails).join(','));
+                $('#notification_emails_hidden').val(Array.from(emails).join(','));
             }
 
             // Function to add email
             function addEmail() {
-                var email = $('#notification_email').val().trim();
+                var email = $('#notification_email_input').val().trim();
                 if (email && isValidEmail(email)) {
-                    // Check if email already exists
                     var exists = false;
                     $('#email_list .badge').each(function() {
-                        if ($(this).text().trim() === email) {
+                        var emailText = $(this).contents().filter(function() { return this.nodeType === 3; }).text().trim();
+                        if (emailText === email) {
                             exists = true;
                             return false;
                         }
                     });
 
                     if (!exists) {
-                        var badge = $('<div class="badge badge-info p-2 mr-2 mb-2">' +
+                        var badge = $('<span class="badge badge-info p-2 mr-2 mb-2">' + // ใช้ span
                             email +
-                            '<button type="button" class="btn btn-sm btn-link text-white remove-email" data-email="' + email + '">' +
+                            '<button type="button" class="btn btn-xs btn-link text-white remove-email ml-1" data-email="' + email + '" aria-label="Remove ' + email + '">' + // btn-xs, ml-1
                             '<i class="fas fa-times"></i>' +
                             '</button>' +
-                            '</div>');
+                            '</span>');
                         $('#email_list').append(badge);
-                        $('#notification_email').val('');
+                        $('#notification_email_input').val('');
                         updateEmailList();
                     } else {
                         alert('This email is already in the list');
@@ -195,76 +252,65 @@
             }
 
             // Initialize email list from saved values
-            var savedEmails = $('#notification_emails').val();
+            var savedEmails = $('#notification_emails_hidden').val();
             if (savedEmails) {
-                var emailSet = new Set(); // Use Set to ensure uniqueness
+                var emailSet = new Set();
                 savedEmails.split(',').forEach(function(email) {
                     email = email.trim();
                     if (email) {
                         emailSet.add(email);
                     }
                 });
-                
-                // Clear existing badges
                 $('#email_list').empty();
-                
-                // Add unique emails as badges
                 emailSet.forEach(function(email) {
-                    var badge = $('<div class="badge badge-info p-2 mr-2 mb-2">' +
+                    var badge = $('<span class="badge badge-info p-2 mr-2 mb-2">' +
                         email +
-                        '<button type="button" class="btn btn-sm btn-link text-white remove-email" data-email="' + email + '">' +
+                        '<button type="button" class="btn btn-xs btn-link text-white remove-email ml-1" data-email="' + email + '" aria-label="Remove ' + email + '">' +
                         '<i class="fas fa-times"></i>' +
                         '</button>' +
-                        '</div>');
+                        '</span>');
                     $('#email_list').append(badge);
                 });
-                
-                // Update hidden input with unique emails
-                $('#notification_emails').val(Array.from(emailSet).join(','));
+                updateEmailList();
             }
 
-            // Add email on button click
-            $('#add_email').click(addEmail);
 
-            // Add email on Enter key press
-            $('#notification_email').keypress(function(e) {
-                if (e.which === 13) { // Enter key
-                    e.preventDefault(); // Prevent form submission
+            $('#add_email').click(addEmail);
+            $('#notification_email_input').keypress(function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
                     addEmail();
                 }
             });
 
-            // Remove email
             $(document).on('click', '.remove-email', function() {
-                $(this).parent().remove();
+                $(this).parent().remove(); // parent() คือ span.badge
                 updateEmailList();
             });
 
-            // Email validation
             function isValidEmail(email) {
                 var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 return re.test(email);
             }
 
-            // Test email button
+            // Test email button - เหมือนเดิม
             $('#test_email').click(function() {
-                var notificationEmails = $('#notification_emails').val();
-                
-                if (!notificationEmails) {
-                    alert('Please add at least one email address');
+                var notificationEmailsForTest = $('#notification_emails_hidden').val();
+
+                if (!notificationEmailsForTest) {
+                    alert('Please add at least one notification email address.');
                     return;
                 }
                 
-                // Show loading state
                 var $btn = $(this);
                 var originalText = $btn.html();
-                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>&nbsp;Sending...');
+                $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Sending...');
                 
                 $.ajax({
                     url: "{{ url_for('admin.email_notification_setting') }}",
                     type: 'POST',
                     data: {
-                        notification_emails: notificationEmails,
+                        notification_emails: notificationEmailsForTest,
                         test_email: true,
                         _csrf_token: "{{ csrf_token() }}"
                     },
@@ -278,14 +324,21 @@
                         }
                     },
                     error: function(xhr) {
-                        var errorMsg = 'Failed to send test emails';
+                        var errorMsg = 'Failed to send test emails. Check console for details.';
                         if (xhr.responseJSON && xhr.responseJSON.message) {
                             errorMsg = xhr.responseJSON.message;
+                        } else if (xhr.responseText) {
+                            try {
+                                var err = JSON.parse(xhr.responseText);
+                                if (err.message) errorMsg = err.message;
+                            } catch (e) {
+                                console.error("Raw error response:", xhr.responseText);
+                            }
                         }
                         alert(errorMsg);
+                        console.error("Test email AJAX error:", xhr);
                     },
                     complete: function() {
-                        // Reset button state
                         $btn.prop('disabled', false).html(originalText);
                     }
                 });

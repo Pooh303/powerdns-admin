@@ -189,7 +189,7 @@ def dashboard():
         zones_result = []
 
     for zone_data in zones_result:
-        zone_actual_name = zone_data['name'] 
+        zone_actual_name = zone_data.get('name') 
         if not zone_actual_name:
             current_app.logger.warning(f"Encountered a zone with no name: {zone_data}")
             continue
@@ -201,29 +201,31 @@ def dashboard():
             if rrset['type'] == 'LUA' and rrset.get('records') and rrset['records']:
                 record = rrset['records'][0]
                 content = record.get('content', '')
-                port, ips = parse_lua_ifportup(content)
-                if port is not None and ips is not None:
+                port, ips_from_lua = parse_lua_ifportup(content)
+                
+                if port is not None and ips_from_lua is not None:
                     record_actual_name = rrset['name']
                     sanitized_zone = re.sub(r'[^a-zA-Z0-9_-]', '_', zone_actual_name.rstrip('.'))
                     sanitized_record = re.sub(r'[^a-zA-Z0-9_-]', '_', record_actual_name.rstrip('.'))
                     html_id = f"lb_{sanitized_zone}_{sanitized_record}"
 
-                    # Check status of all backend servers
-                    status_info = check_load_balancer_status(port, ips)
-                    
-                    # Check if record is disabled in PowerDNS
-                    # current_app.logger.info(f'Full record data: {record}')
-                    is_disabled = record.get('disabled', False)
-                    # current_app.logger.info(f'Disabled state: {is_disabled}')
-                    
-                    # If record is disabled, override status to inactive
-                    if is_disabled:
-                        status_info['status'] = 'inactive'
-                        status_info['message'] = 'Load balancer is disabled'
+                    health_status_info = check_load_balancer_status(port, ips_from_lua)
+                    is_disabled_in_pdns = record.get('disabled', False)
+
+                    current_display_status = ''
+                    current_status_message = ''
+
+                    if is_disabled_in_pdns:
+                        current_display_status = 'inactive'
+                        current_status_message = 'Load balancer is manually disabled by user.'
                     else:
-                        # Keep the original status (active/warning/error/pending)
-                        status_info['status'] = status_info.get('status', 'unknown')
-                        status_info['message'] = status_info.get('message', 'Status check failed')
+                        current_display_status = health_status_info.get('status', 'unknown')
+                        current_status_message = health_status_info.get('message', 'Status check failed or pending.')
+                    
+                    ordered_server_statuses_list = get_ordered_server_statuses(
+                        health_status_info.get('server_statuses', {}),
+                        ips_from_lua
+                    )
                     
                     lb_data = {
                         'html_id': html_id, 
@@ -231,17 +233,43 @@ def dashboard():
                         'record_actual_name': record_actual_name,
                         'name': record_actual_name.rstrip('.'), 
                         'zone_display_name': zone_actual_name.rstrip('.'),
-                        'config_summary': f"{len(ips)} servers, port {port}, TTL {rrset['ttl']}s",
-                        'status': status_info.get('status', 'unknown'),
-                        'status_message': status_info.get('message', 'Status check failed'),
-                        'all_servers_up': status_info.get('all_servers_up', False),
-                        'server_statuses': status_info.get('server_statuses', {})
+                        'config_summary': f"{len(ips_from_lua)} servers, port {port}, TTL {rrset['ttl']}s",
+                        'status': current_display_status,
+                        'status_message': current_status_message,
+                        'all_servers_up': health_status_info.get('all_servers_up', False),
+                        'server_statuses_list': ordered_server_statuses_list 
                     }
                     load_balancers_data.append(lb_data)
                 else:
                     current_app.logger.info(f"Skipping LUA record {rrset['name']} in zone {zone_actual_name} due to parsing error or unrecognized format: '{content}'")
 
     return render_template('load_balance_dashboard.html', load_balancers=load_balancers_data)
+
+
+def get_ordered_server_statuses(original_server_statuses_dict, original_ips_list_from_lua):
+    if not original_server_statuses_dict and not original_ips_list_from_lua:
+        return []
+    if not original_server_statuses_dict:
+        return [{'ip': ip, 'status': 'unknown'} for ip in original_ips_list_from_lua]
+
+    ordered_statuses = []
+    present_ips_in_lua_order = set()
+
+    if original_ips_list_from_lua:
+        for ip in original_ips_list_from_lua:
+            status = original_server_statuses_dict.get(ip, 'unknown')
+            ordered_statuses.append({'ip': ip, 'status': status})
+            present_ips_in_lua_order.add(ip)
+    
+    remaining_ips_from_status_check = []
+    for ip in original_server_statuses_dict:
+        if ip not in present_ips_in_lua_order:
+            remaining_ips_from_status_check.append(ip)
+    
+    for ip in sorted(remaining_ips_from_status_check):
+         ordered_statuses.append({'ip': ip, 'status': original_server_statuses_dict[ip]})
+             
+    return ordered_statuses
 
 @load_balance_bp.route('/add', methods=['GET', 'POST'])
 @login_required
@@ -284,14 +312,9 @@ def add():
         if errors:
             return render_template('load_balance_add.html', request_form=request.form, zone_options=zone_options, backend_ips=backend_ips_form)
 
-        # Prepare names for Record().apply() and for checks
-        # api_record_name is the relative part, e.g., "web" or "@"
-        # api_zone_name is the zone part, e.g., "example.com" (no trailing dot from form)
         api_record_name = lb_record_subname
         api_zone_name_form = lb_zone_name
 
-        # --- PRE-EXISTENCE CHECK ---
-        # Construct the FQDN of the record we intend to create (with trailing dot for API consistency)
         target_record_fqdn_display = f"{api_record_name}.{api_zone_name_form}" if api_record_name != "@" else api_zone_name_form
         target_record_fqdn_api = f"{api_record_name}.{api_zone_name_form}." if api_record_name != "@" else api_zone_name_form + "."
         
@@ -317,7 +340,6 @@ def add():
                                    request_form=request.form,
                                    zone_options=zone_options,
                                    backend_ips=cleaned_backend_ips)
-        # --- END PRE-EXISTENCE CHECK ---
 
         lua_content = build_lua_ifportup(lb_port, cleaned_backend_ips)
 
@@ -373,8 +395,68 @@ def add():
 
         return render_template('load_balance_add.html', request_form=request.form, zone_options=zone_options, backend_ips=cleaned_backend_ips)
 
-    # GET request
     return render_template('load_balance_add.html', request_form=None, zone_options=zone_options, backend_ips=[''])
+
+
+@load_balance_bp.route('/realtime-status', methods=['GET'])
+@login_required
+def realtime_status():
+    if not (Setting().get('allow_user_view_load_balancers') or
+            (current_user.is_authenticated and current_user.role.name in ['Administrator', 'Operator'])):
+        return jsonify({'error': 'Forbidden', 'load_balancers': []}), 403
+
+    domain_api = Domain()
+    zones_result = domain_api.get_domains()
+    load_balancers_data_for_json = []
+
+    if not zones_result:
+        zones_result = []
+
+    for zone_data in zones_result:
+        zone_actual_name = zone_data.get('name')
+        if not zone_actual_name:
+            continue
+        zone_info = domain_api.get_domain_info(zone_actual_name)
+        if not zone_info or 'rrsets' not in zone_info:
+            continue
+        for rrset in zone_info.get('rrsets', []):
+            if rrset['type'] == 'LUA' and rrset.get('records') and rrset['records']:
+                record = rrset['records'][0]
+                content = record.get('content', '')
+                port, ips_from_lua = parse_lua_ifportup(content)
+                
+                if port is not None and ips_from_lua is not None:
+                    record_actual_name = rrset['name']
+                    sanitized_zone = re.sub(r'[^a-zA-Z0-9_-]', '_', zone_actual_name.rstrip('.'))
+                    sanitized_record = re.sub(r'[^a-zA-Z0-9_-]', '_', record_actual_name.rstrip('.'))
+                    html_id = f"lb_{sanitized_zone}_{sanitized_record}"
+
+                    health_status_info = check_load_balancer_status(port, ips_from_lua)
+                    is_disabled_in_pdns = record.get('disabled', False)
+
+                    current_display_status = ''
+                    current_status_message = ''
+                    if is_disabled_in_pdns:
+                        current_display_status = 'inactive'
+                        current_status_message = 'Load balancer is manually disabled by user.'
+                    else:
+                        current_display_status = health_status_info.get('status', 'unknown')
+                        current_status_message = health_status_info.get('message', 'Status check failed or pending.')
+                    
+                    ordered_server_statuses_list = get_ordered_server_statuses(
+                        health_status_info.get('server_statuses', {}),
+                        ips_from_lua
+                    )
+                    
+                    lb_data_item = {
+                        'html_id': html_id,
+                        'status': current_display_status,
+                        'status_message': current_status_message,
+                        'server_statuses_list': ordered_server_statuses_list
+                    }
+                    load_balancers_data_for_json.append(lb_data_item)
+    
+    return jsonify({'load_balancers': load_balancers_data_for_json})
 
 
 @load_balance_bp.route('/edit/<path:zone_name_dotted>/<path:record_name_dotted>', methods=['GET', 'POST'])
@@ -564,17 +646,23 @@ def view(zone_name_dotted, record_name_dotted):
     }
     return render_template('load_balance_view.html', load_balancer=load_balancer_details)
 
-def update_load_balancer_status():
+def update_load_balancer_status(): # เปลี่ยนชื่อเป็น update_load_balancer_health_only หรือชื่อที่สื่อความหมายก็ได้
     """
-    Update status of all load balancers
+    STRICT SEPARATION VERSION: This function ONLY triggers re-checks
+    of backend health for ALL LBs. It will NEVER change the 'disabled' state in PowerDNS.
+    The 'disabled' state is purely managed by the user via the toggle switch.
+    The dashboard will then display 'Error' if an 'active' LB has all backends down.
     """
     domain_api = Domain()
     zones_result = domain_api.get_domains()
     
     if not zones_result:
-        current_app.logger.info("No zones found for load balancer status update")
+        current_app.logger.info("No zones found for load balancer health re-check")
         return
-    
+
+    current_app.logger.info("Initiating health re-check for all LBs (PDNS 'disabled' state will NOT be modified by this process).")
+    checked_lbs_count = 0
+
     for zone_data in zones_result:
         zone_actual_name = zone_data['name']
         if not zone_actual_name:
@@ -586,39 +674,45 @@ def update_load_balancer_status():
             
         for rrset in zone_info.get('rrsets', []):
             if rrset['type'] == 'LUA' and rrset.get('records') and rrset['records']:
-                record = rrset['records'][0]
-                content = record.get('content', '')
+                checked_lbs_count += 1
+                record_from_pdns = rrset['records'][0] # ยังคงต้องอ่านเพื่อเอา content
+                content = record_from_pdns.get('content', '')
                 port, ips = parse_lua_ifportup(content)
                 
                 if port is not None and ips is not None:
-                    # Check status of all backend servers
-                    status = check_load_balancer_status(port, ips)
+                    # **1. อ่านสถานะ 'disabled' ปัจจุบันจาก PowerDNS (อาจจะไม่จำเป็นถ้าไม่ใช้แล้ว แต่เก็บไว้เผื่อ log)**
+                    # is_currently_disabled_in_pdns = record_from_pdns.get('disabled', False)
+
+                    # **2. ทำการตรวจสอบสุขภาพ (health check) เท่านั้น**
+                    health_check_result = check_load_balancer_status(port, ips)
+                    current_app.logger.debug(
+                        f"Health check for LB {rrset['name']} in zone {zone_actual_name}: "
+                        f"Status: {health_check_result.get('status')}, "
+                        f"Message: {health_check_result.get('message')}"
+                    )
                     
-                    # Update record status based on check results
-                    if status['all_servers_up']:
-                        record['disabled'] = False
-                    else:
-                        record['disabled'] = True
+                    # *** ลบส่วนนี้ทั้งหมด: ***
+                    # # **3. ตรรกะใหม่ในการตัดสินใจว่าจะเปลี่ยนสถานะ 'disabled' ใน PDNS หรือไม่**
+                    # should_disable_in_pdns = False
+                    # if not is_currently_disabled_in_pdns:
+                    #     if health_check_result['status'] == 'error':
+                    #         if health_check_result.get('server_statuses') and \
+                    #            all(s == 'down' for s in health_check_result['server_statuses'].values()):
+                    #             should_disable_in_pdns = True
+                    #             # ... logging ...
                     
-                    # Update the record in PowerDNS
-                    record_api = Record()
-                    record_to_apply = [{
-                        'record_name': extract_subdomain(rrset['name'].rstrip('.'), zone_actual_name.rstrip('.')),
-                        'record_type': "LUA",
-                        'record_ttl': rrset['ttl'],
-                        'record_data': content,
-                        'record_status': 'Disabled' if record['disabled'] else 'Active',
-                        'comment_data': rrset.get('comments', [])
-                    }]
-                    
-                    try:
-                        result = record_api.apply(zone_actual_name.rstrip('.'), record_to_apply)
-                        if result and result.get('status') == 'ok':
-                            current_app.logger.info(f"Updated load balancer status for {rrset['name']} in zone {zone_actual_name}")
-                        else:
-                            current_app.logger.error(f"Failed to update load balancer status for {rrset['name']} in zone {zone_actual_name}")
-                    except Exception as e:
-                        current_app.logger.error(f"Error updating load balancer status: {str(e)}")
+                    # if should_disable_in_pdns:
+                    #     # **4. อัปเดต Record ใน PowerDNS ให้เป็น disabled: True**
+                    #     record_api = Record()
+                    #     record_to_apply = [{ ... }]
+                    #     # ... try/except block for api_result ...
+                    # elif is_currently_disabled_in_pdns:
+                    #     # ... logging ...
+                    # else:
+                    #     # ... logging ...
+                    # *** สิ้นสุดส่วนที่ลบ ***
+    
+    current_app.logger.info(f"Health re-check process completed for {checked_lbs_count} LBs. No PDNS 'disabled' states were modified by this process.")
 
 @load_balance_bp.route('/status/update', methods=['POST'])
 @login_required
@@ -632,11 +726,11 @@ def update_status():
     
     try:
         # Get CSRF token from JSON data
-        csrf_token = request.json.get('csrf_token')
-        if not csrf_token:
+        csrf_token_from_request = request.json.get('csrf_token')
+        if not csrf_token_from_request:
             return jsonify({
                 'status': 'error',
-                'msg': 'Missing CSRF token'
+                'msg': 'Missing CSRF token in request payload'
             }), 400
 
         update_load_balancer_status()
@@ -648,7 +742,7 @@ def update_status():
         })
 
     except Exception as e:
-        current_app.logger.error(f"Error updating load balancer statuses: {str(e)}")
+        current_app.logger.error(f"Error in /status/update endpoint: {str(e)}", exc_info=True)
         return jsonify({
             'status': 'error',
             'msg': f'Error updating load balancer statuses: {str(e)}'

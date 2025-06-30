@@ -46,26 +46,25 @@ JSONIFY_PRETTYPRINT_REGULAR = False
 JSONIFY_MIMETYPE = 'application/json'
 
 # SMTP Configuration
-SMTP_SERVER = 'smtp.gmail.com'
-SMTP_PORT = 587
-SMTP_USERNAME = 'dreamminigame333@gmail.com'
-SMTP_PASSWORD = 'raez vdiz zbfd qpuq'
+SMTP_SERVER = os.getenv('SMTP_SERVER', '')
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USERNAME = os.getenv('SMTP_USERNAME', '')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 # SMTP_FROM_ADDRESS = os.getenv('SMTP_FROM_ADDRESS', 'noreply@localhost')
-SMTP_FROM_ADDRESS = os.getenv('SMTP_FROM_ADDRESS', 'PowerDNS Admin <dreamminingame333@gmail.com>')
-SMTP_USE_TLS = True
+SMTP_FROM_ADDRESS = os.getenv('SMTP_FROM_ADDRESS', '')
+SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'False').lower() == 'true'
 SMTP_USE_SSL = os.getenv('SMTP_USE_SSL', 'False').lower() == 'true'
-SMTP_DEFAULT_SENDER = 'dreamminigame333@gmail.com'
+SMTP_DEFAULT_SENDER = os.getenv('SMTP_DEFAULT_SENDER', '')
 
 # Admin Configuration
-ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'dreamminigame333@gmail.com')
-
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', '')
 
 # Email recipient(s) for LUA backend status alerts
-NOTIFICATION_EMAILS = os.getenv('NOTIFICATION_EMAILS', 'samchaischool96@gmail.com,rouimmit1987@gmail.com')
+NOTIFICATION_EMAILS = os.getenv('NOTIFICATION_EMAILS', '')
 # Notify when a LUA backend port comes back UP
 NOTIFY_PORT_UP = os.getenv('NOTIFY_PORT_UP', 'False').lower() == 'true'
 # Notify when a LUA backend port goes DOWN
-NOTIFY_PORT_DOWN = os.getenv('NOTIFY_PORT_DOWN', 'True').lower() == 'true'
+NOTIFY_PORT_DOWN = os.getenv('NOTIFY_PORT_DOWN', 'False').lower() == 'true'
 # Interval for checking LUA backend statuses (in seconds)
 LUA_BACKEND_MONITOR_INTERVAL = int(os.getenv('LUA_BACKEND_MONITOR_INTERVAL', '60'))
 # Enable or disable the LUA backend monitoring service
